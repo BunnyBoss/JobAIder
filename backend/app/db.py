@@ -88,6 +88,11 @@ CREATE TABLE IF NOT EXISTS improvement_plans (
 """
 
 
+MIGRATIONS = [
+    ("interview_sessions", "question_count", "ALTER TABLE interview_sessions ADD COLUMN question_count INTEGER DEFAULT 3"),
+]
+
+
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -105,6 +110,10 @@ def init_db() -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path) as conn:
         conn.executescript(SCHEMA)
+        for table, column, statement in MIGRATIONS:
+            columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+            if column not in columns:
+                conn.execute(statement)
         conn.commit()
 
 
@@ -118,4 +127,3 @@ def get_db() -> Iterator[sqlite3.Connection]:
         conn.commit()
     finally:
         conn.close()
-

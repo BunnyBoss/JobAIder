@@ -104,8 +104,9 @@ class ResumeUpdateRequest(BaseModel):
 
 
 class GapAnalysisRequest(BaseModel):
-    profile_id: int
+    profile_id: int | None = None
     role_analysis_id: int
+    resume_id: int | None = None
 
 
 class GapAnalysisUpdateRequest(BaseModel):
@@ -127,6 +128,7 @@ class GapAnalysis(BaseModel):
 
 class InterviewStartRequest(BaseModel):
     profile_id: int | None = None
+    resume_id: int | None = None
     role_analysis_id: int | None = None
     mode: Literal["Technical", "Behavioral", "Hiring Manager", "System Design", "Mixed"] = "Mixed"
     difficulty: Literal["Easy", "Medium", "Hard"] = "Medium"

@@ -71,6 +71,25 @@ def _insert_document(source_type: str, name: str, content: str, path: str | None
         return int(cur.lastrowid)
 
 
+def _resume_as_profile(resume_id: int) -> tuple[int, dict]:
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT profile_id, role_analysis_id, title, kind, markdown, metadata_json FROM resumes WHERE id = ?",
+            (resume_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    return int(row["profile_id"]), {
+        "summary": f"{row['title']} ({row['kind']})",
+        "resume_id": resume_id,
+        "resume_kind": row["kind"],
+        "resume_title": row["title"],
+        "resume_markdown": row["markdown"],
+        "source_role_analysis_id": row["role_analysis_id"],
+        "metadata": decode_json(row["metadata_json"]),
+    }
+
+
 def _pdf_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
@@ -603,16 +622,24 @@ def export_resume(resume_id: int, format: str = "markdown") -> StreamingResponse
 
 @app.post("/api/gap/analyze")
 async def create_gap_analysis(payload: GapAnalysisRequest) -> dict:
-    profile = _row_json("profiles", payload.profile_id, "profile_json")
+    if payload.resume_id is not None:
+        profile_id, profile = _resume_as_profile(payload.resume_id)
+    elif payload.profile_id is not None:
+        profile_id = payload.profile_id
+        profile = _row_json("profiles", payload.profile_id, "profile_json")
+    else:
+        raise HTTPException(status_code=400, detail="profile_id or resume_id is required")
     role = _row_json("role_analyses", payload.role_analysis_id, "analysis_json")
     analysis = await analyze_gap(profile, role)
+    if payload.resume_id is not None:
+        analysis["resume_id"] = payload.resume_id
     with get_db() as conn:
         cur = conn.execute(
             """
             INSERT INTO gap_analyses (profile_id, role_analysis_id, analysis_json, created_at)
             VALUES (?, ?, ?, ?)
             """,
-            (payload.profile_id, payload.role_analysis_id, encode_json(analysis), now_iso()),
+            (profile_id, payload.role_analysis_id, encode_json(analysis), now_iso()),
         )
     return {"id": int(cur.lastrowid), "analysis": analysis}
 
@@ -756,7 +783,12 @@ def delete_improvement_plan(plan_id: int) -> dict:
 
 @app.post("/api/interview/start")
 def start_interview(payload: InterviewStartRequest) -> dict:
-    question = first_question(payload.mode, payload.difficulty)
+    profile_id = payload.profile_id
+    context_note = ""
+    if payload.resume_id is not None:
+        profile_id, resume_profile = _resume_as_profile(payload.resume_id)
+        context_note = f" Use resume #{payload.resume_id}: {resume_profile['resume_title']}."
+    question = first_question(payload.mode, payload.difficulty) + context_note
     history = [{"role": "assistant", "content": question}]
     timestamp = now_iso()
     with get_db() as conn:
@@ -767,7 +799,7 @@ def start_interview(payload: InterviewStartRequest) -> dict:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                payload.profile_id,
+                profile_id,
                 payload.role_analysis_id,
                 payload.mode,
                 payload.difficulty,

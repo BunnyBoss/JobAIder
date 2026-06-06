@@ -3,20 +3,20 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { ResumeSelect } from "@/components/saved-selectors";
 import { StatusPanel } from "@/components/status-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { api, type SavedResume } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Download } from "lucide-react";
 
 export default function InterviewPrepPage() {
-  const profiles = useQuery({ queryKey: ["profiles"], queryFn: api.listProfiles });
   const roles = useQuery({ queryKey: ["roles"], queryFn: api.listRoles });
   const resumes = useQuery({ queryKey: ["resumes"], queryFn: api.listResumes });
 
-  const [profileId, setProfileId] = useState<number | null>(null);
+  const [resumeId, setResumeId] = useState<number | null>(null);
   const [roleId, setRoleId] = useState<number | null>(null);
   const [questionCount, setQuestionCount] = useState(3);
   const [mode, setMode] = useState("Mixed");
@@ -28,17 +28,10 @@ export default function InterviewPrepPage() {
   const [sessionFeedback, setSessionFeedback] = useState<any | null>(null);
   const [isSessionActive, setIsSessionActive] = useState(false);
 
-  // Get saved resumes for selected profile
-  const profileResumes = resumes.data?.resumes?.filter(
-    (r) => r.profile_id === profileId
-  ) || [];
-  const masterResumes = profileResumes.filter((r) => !r.role_analysis_id);
-  const tailoredResumes = profileResumes.filter((r) => r.role_analysis_id);
-
   const start = useMutation({
     mutationFn: () =>
       api.startInterview({
-        profile_id: profileId,
+        resume_id: resumeId,
         role_analysis_id: roleId,
         mode,
         difficulty,
@@ -70,7 +63,7 @@ export default function InterviewPrepPage() {
 
   const handleSaveSession = () => {
     const sessionData = {
-      profile_id: profileId,
+      resume_id: resumeId,
       role_analysis_id: roleId,
       mode,
       difficulty,
@@ -84,7 +77,7 @@ export default function InterviewPrepPage() {
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `interview_session_${profileId}_${Date.now()}.json`;
+    link.download = `interview_session_resume_${resumeId}_${Date.now()}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -102,23 +95,13 @@ export default function InterviewPrepPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Select Profile & Settings</CardTitle>
+              <CardTitle>Select Resume & Settings</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Profile</label>
-                  <Select
-                    value={profileId?.toString() ?? ""}
-                    onChange={(e) => setProfileId(e.target.value ? parseInt(e.target.value) : null)}
-                  >
-                    <option value="">Select a profile...</option>
-                    {profiles.data?.profiles?.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </Select>
+                  <label className="text-sm font-medium">Resume</label>
+                  <ResumeSelect resumes={resumes.data?.resumes ?? []} value={resumeId} onChange={setResumeId} />
                 </div>
 
                 <div className="space-y-2">
@@ -167,7 +150,7 @@ export default function InterviewPrepPage() {
                     value={roleId?.toString() ?? ""}
                     onChange={(e) => setRoleId(e.target.value ? parseInt(e.target.value) : null)}
                   >
-                    <option value="">None - Use Master Profile</option>
+                    <option value="">None - Use selected resume only</option>
                     {roles.data?.roles?.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.title} at {r.company}
@@ -179,7 +162,7 @@ export default function InterviewPrepPage() {
 
               <Button
                 onClick={() => start.mutate()}
-                disabled={start.isPending || !profileId}
+                disabled={start.isPending || !resumeId}
                 className="w-full"
               >
                 Start Interview
@@ -192,67 +175,6 @@ export default function InterviewPrepPage() {
             </CardContent>
           </Card>
 
-          {profileId && (
-            <>
-              {masterResumes.length > 0 && (
-                <Card className="mt-4">
-                  <CardHeader>
-                    <CardTitle>Master Profile</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {masterResumes.map((resume) => (
-                      <div key={resume.id} className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">
-                            {resume.kind === "ats" ? "ATS Resume" : "Human-Friendly Resume"}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            ID: {resume.id}
-                          </span>
-                        </div>
-                        <div className="rounded-md bg-muted p-3 max-h-48 overflow-auto text-xs">
-                          <pre className="whitespace-pre-wrap break-words font-mono">
-                            {resume.markdown.substring(0, 500)}
-                            {resume.markdown.length > 500 && "..."}
-                          </pre>
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-
-              {roleId && tailoredResumes.length > 0 && (
-                <Card className="mt-4">
-                  <CardHeader>
-                    <CardTitle>Tailored Profile</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {tailoredResumes
-                      .filter((r) => r.role_analysis_id === roleId)
-                      .map((resume) => (
-                        <div key={resume.id} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium">
-                              Tailored for Role {resume.role_analysis_id}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              ID: {resume.id}
-                            </span>
-                          </div>
-                          <div className="rounded-md bg-muted p-3 max-h-48 overflow-auto text-xs">
-                            <pre className="whitespace-pre-wrap break-words font-mono">
-                              {resume.markdown.substring(0, 500)}
-                              {resume.markdown.length > 500 && "..."}
-                            </pre>
-                          </div>
-                        </div>
-                      ))}
-                  </CardContent>
-                </Card>
-              )}
-            </>
-          )}
         </>
       )}
 
@@ -289,7 +211,7 @@ export default function InterviewPrepPage() {
               <Button
                 onClick={() => submit.mutate("skip")}
                 disabled={submit.isPending}
-                variant="outline"
+                variant="secondary"
               >
                 Skip Question
               </Button>
@@ -400,7 +322,7 @@ export default function InterviewPrepPage() {
             <div className="flex gap-2 flex-wrap">
               <Button
                 onClick={handleSaveSession}
-                variant="outline"
+                variant="secondary"
                 className="flex items-center gap-2"
               >
                 <Download className="w-4 h-4" />

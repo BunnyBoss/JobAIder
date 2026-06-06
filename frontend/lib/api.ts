@@ -154,6 +154,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ profile_id, role_analysis_id })
     }),
+  gapByResume: (resume_id: number, role_analysis_id: number) =>
+    request<{ id: number; analysis: Record<string, unknown> }>("/api/gap/analyze", {
+      method: "POST",
+      body: JSON.stringify({ resume_id, role_analysis_id })
+    }),
   listGaps: () => request<{ gaps: SavedGap[] }>("/api/gaps"),
   saveGap: (gap_id: number, body: { analysis: Record<string, unknown> }) =>
     request<{ saved: boolean; id: number }>(`/api/gap/${gap_id}`, {

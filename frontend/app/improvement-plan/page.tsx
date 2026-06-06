@@ -98,23 +98,22 @@ export default function ImprovementPlanPage() {
           )}
           <div className="space-y-3">
             {plans.data?.plans.map((plan) => (
-              <button
+              <div
                 key={plan.id}
                 className={`rounded-md border p-4 text-left transition-colors w-full ${
                   viewingPlanId === plan.id ? "bg-primary/10 border-primary" : "hover:bg-muted"
                 }`}
-                onClick={() => setViewingPlanId(plan.id)}
               >
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <button className="flex-1 text-left" onClick={() => setViewingPlanId(plan.id)}>
                     <div className="font-medium">Plan #{plan.id}</div>
                     <div className="mt-1 text-xs text-muted-foreground">
                       Gap #{plan.gap_analysis_id} · Created {new Date(plan.created_at).toLocaleString()}
                     </div>
-                  </div>
+                  </button>
                   <Button
                     variant="ghost"
-                    size="sm"
+                    className="h-8 px-2"
                     onClick={(e) => {
                       e.stopPropagation();
                       if (window.confirm(`Delete plan #${plan.id}?`)) {
@@ -128,7 +127,7 @@ export default function ImprovementPlanPage() {
                 <div className="mt-2 text-sm text-muted-foreground">
                   Overall score: {String(plan.plan.overall_score ?? "Unknown")}% → +{String(plan.plan.improvement_potential ?? 0)}%
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         </CardContent>
@@ -143,11 +142,11 @@ export default function ImprovementPlanPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-md bg-muted p-4">
                 <div className="text-sm text-muted-foreground">Current Match Score</div>
-                <div className="text-3xl font-bold mt-2">{viewingPlan.plan.overall_score}%</div>
+                <div className="text-3xl font-bold mt-2">{String(viewingPlan.plan.overall_score ?? "Unknown")}%</div>
               </div>
               <div className="rounded-md bg-primary/10 p-4">
                 <div className="text-sm text-muted-foreground">Improvement Potential</div>
-                <div className="text-3xl font-bold mt-2">+{viewingPlan.plan.improvement_potential}%</div>
+                <div className="text-3xl font-bold mt-2">+{String(viewingPlan.plan.improvement_potential ?? 0)}%</div>
               </div>
             </div>
 
@@ -207,4 +206,3 @@ export default function ImprovementPlanPage() {
     </>
   );
 }
-
