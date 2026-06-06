@@ -839,30 +839,30 @@ async def answer_interview(payload: InterviewAnswerRequest) -> dict:
     # Handle skip action
     if payload.action == "skip":
         history.append({"role": "user", "content": "[SKIPPED]"})
+        
+        last_question = next((item["content"] for item in reversed(history[:-1]) if item["role"] == "assistant"), "")
+        evaluation = await evaluate_answer(mode, difficulty, last_question, "[User skipped this question. Please ask a new, different question.]")
+        history.append({"role": "assistant", "content": evaluation["next_question"]})
+        
         question_number = (len(history) + 1) // 2
+        is_final = question_number > question_count
 
-        if question_number > question_count:
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE interview_sessions SET history_json = ?, updated_at = ? WHERE id = ?",
+                (encode_json(history), now_iso(), payload.session_id),
+            )
+
+        if is_final:
             feedback = await generate_session_feedback(history, question_count)
-            with get_db() as conn:
-                conn.execute(
-                    "UPDATE interview_sessions SET history_json = ?, updated_at = ? WHERE id = ?",
-                    (encode_json(history), now_iso(), payload.session_id),
-                )
             return {
                 "session_complete": True,
                 "is_final_question": True,
                 "session_feedback": feedback,
             }
         else:
-            history.append({"role": "assistant", "content": "Next question..."})
-            with get_db() as conn:
-                conn.execute(
-                    "UPDATE interview_sessions SET history_json = ?, updated_at = ? WHERE id = ?",
-                    (encode_json(history), now_iso(), payload.session_id),
-                )
-            next_question = next((item["content"] for item in reversed(history) if item["role"] == "assistant"), "")
             return {
-                "next_question": next_question,
+                "next_question": evaluation["next_question"],
                 "question_number": question_number,
                 "question_count": question_count,
                 "is_final_question": False,
