@@ -10,8 +10,12 @@
   --muted: 210 18% 92%;
   --muted-foreground: 215 12% 43%;
   --border: 214 20% 84%;
+  --input: 214 20% 84%;
+  --ring: 173 72% 31%;
   --primary: 173 72% 31%;
   --primary-foreground: 0 0% 100%;
+  --accent: 210 18% 94%;
+  --accent-foreground: 220 18% 12%;
   --destructive: 0 72% 45%;
 }
 
@@ -23,8 +27,12 @@
   --muted: 220 15% 18%;
   --muted-foreground: 215 12% 70%;
   --border: 220 13% 23%;
+  --input: 220 13% 23%;
+  --ring: 173 70% 38%;
   --primary: 173 70% 38%;
   --primary-foreground: 0 0% 100%;
+  --accent: 220 15% 18%;
+  --accent-foreground: 210 20% 94%;
   --destructive: 0 70% 50%;
 }
 

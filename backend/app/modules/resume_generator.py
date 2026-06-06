@@ -6,18 +6,32 @@ from typing import Any
 from app.modules.llm_provider import LLMProvider
 
 
+import re
+
+
+def _strip_markdown_fences(text: str) -> str:
+    """Remove wrapping ```markdown ... ``` fences that LLMs sometimes add."""
+    stripped = text.strip()
+    # Match ```markdown or ```md or just ``` at the start, and ``` at the end
+    pattern = r"^```(?:markdown|md)?\s*\n(.*?)```\s*$"
+    m = re.match(pattern, stripped, re.DOTALL)
+    if m:
+        return m.group(1).strip()
+    return text
+
+
 def _to_string(value: Any) -> str:
     """Convert a value to a string, handling dicts and other types."""
     if isinstance(value, str):
-        return value
+        return _strip_markdown_fences(value)
     if isinstance(value, dict):
         # If it's a dict, try to extract content/text/markdown fields
         if "content" in value:
-            return str(value["content"])
+            return _strip_markdown_fences(str(value["content"]))
         if "text" in value:
-            return str(value["text"])
+            return _strip_markdown_fences(str(value["text"]))
         if "markdown" in value:
-            return str(value["markdown"])
+            return _strip_markdown_fences(str(value["markdown"]))
         # Otherwise, serialize to JSON
         return json.dumps(value, ensure_ascii=False, indent=2)
     return str(value)

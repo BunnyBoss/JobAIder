@@ -3,6 +3,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Pencil, Trash2, X, Download, FileText, Wand2, User, Briefcase, Layout, Sparkles, FileCode2, Settings, Target, Eye } from "lucide-react";
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { PageHeader } from "@/components/page-header";
 import { ProfileSelect, RoleSelect } from "@/components/saved-selectors";
 import { StatusPanel } from "@/components/status-panel";
@@ -12,6 +13,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { api, API_BASE, type SavedResume } from "@/lib/api";
 
 type ResumeKind = "ats" | "human" | "tailored";
+
+/** Strip wrapping ```markdown ... ``` fences that LLMs sometimes return. */
+function stripFences(text: string): string {
+  const trimmed = text.trim();
+  const m = trimmed.match(/^```(?:markdown|md)?\s*\n([\s\S]*?)```\s*$/);
+  return m ? m[1].trim() : text;
+}
 
 export default function ResumeStudioPage() {
   const profiles = useQuery({ queryKey: ["profiles"], queryFn: api.listProfiles });
@@ -205,12 +213,8 @@ export default function ResumeStudioPage() {
             )}
             
             {!isEditing ? (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-6 shadow-sm overflow-hidden prose dark:prose-invert max-w-none">
-                {/* Fallback to pre-formatted text if no full markdown renderer is present, 
-                    but styled to look much cleaner than a raw textarea */}
-                <pre className="font-mono text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300 font-sans break-words bg-transparent p-0 m-0 border-0 overflow-visible">
-                  {selected.markdown}
-                </pre>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-6 sm:p-8 shadow-sm overflow-hidden prose prose-slate dark:prose-invert max-w-none prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-li:my-0.5 prose-p:leading-relaxed">
+                <ReactMarkdown>{stripFences(selected.markdown)}</ReactMarkdown>
               </div>
             ) : (
               <div className="rounded-md border border-slate-200 dark:border-slate-800 overflow-hidden shadow-inner">

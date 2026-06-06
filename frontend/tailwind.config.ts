@@ -15,7 +15,11 @@ const config: Config = {
         "primary-foreground": "hsl(var(--primary-foreground))",
         card: "hsl(var(--card))",
         "card-foreground": "hsl(var(--card-foreground))",
-        destructive: "hsl(var(--destructive))"
+        destructive: "hsl(var(--destructive))",
+        accent: "hsl(var(--accent))",
+        "accent-foreground": "hsl(var(--accent-foreground))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))"
       },
       borderRadius: {
         lg: "8px",
@@ -24,7 +28,7 @@ const config: Config = {
       }
     }
   },
-  plugins: []
+  plugins: [require("@tailwindcss/typography")]
 };
 
 export default config;
