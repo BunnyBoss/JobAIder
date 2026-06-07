@@ -1,7 +1,34 @@
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+jobaider.db
+jobradar.db
+backend/jobaider.db
 backend/jobradar.db
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
 backend/**/*.pyc
 backend/**/__pycache__/
+backend/.pytest_cache/
+backend/.venv/
+backend/venv/
+backend/env/
+backend/jobradar_backend.egg-info/
+*.egg-info/
+
+# Node / Next.js
 frontend/node_modules/
 frontend/.next/
-.env
+frontend/out/
+frontend/build/
+
+# IDE / OS
+.vscode/
+.idea/
 .DS_Store

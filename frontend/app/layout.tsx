@@ -4,8 +4,8 @@ import { AppShell } from "@/components/app-shell";
 import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
-  title: "JobRadar",
-  description: "Local-first AI job application assistant"
+  title: "JobAIder",
+  description: "AI Job Application Assistant"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

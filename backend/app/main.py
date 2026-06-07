@@ -35,7 +35,7 @@ from app.schemas import (
     RoleAnalysisRequest,
 )
 
-app = FastAPI(title="JobRadar API", version="0.1.0")
+app = FastAPI(title="JobAIder API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -200,6 +200,20 @@ async def upload_profile_files(files: Annotated[list[UploadFile], File(...)]) ->
         doc_id = _insert_document("upload", name, content)
         saved.append({"id": doc_id, "name": name, "source_type": "upload", "characters": len(content)})
     return {"documents": saved}
+
+
+@app.post("/api/utils/extract-text")
+async def extract_text_from_files(files: Annotated[list[UploadFile], File(...)]) -> dict:
+    extracted = []
+    for upload in files:
+        name = normalize_uploaded_name(upload.filename or "upload")
+        suffix = Path(name).suffix
+        with NamedTemporaryFile(suffix=suffix, delete=True) as temp:
+            temp.write(await upload.read())
+            temp.flush()
+            content = read_document(Path(temp.name))
+        extracted.append({"name": name, "text": content})
+    return {"files": extracted}
 
 
 @app.post("/api/profile/build")
@@ -433,18 +447,39 @@ async def create_generic_resumes(payload: ResumeRequest) -> dict:
 
 @app.post("/api/resume/generate")
 async def generate_resume(payload: ResumeGenerateRequest) -> dict:
-    profile = _row_json("profiles", payload.profile_id, "profile_json")
+    if not payload.profile_id and not payload.resume_id:
+        raise HTTPException(status_code=400, detail="Must provide profile_id or resume_id")
+
+    source_content = None
+    if payload.resume_id:
+        source_content = _row_str("resumes", payload.resume_id, "markdown")
+        # For simplicity, we still need a profile_id for foreign keys. If resume is provided, fetch its profile_id.
+        profile_id = int(_row_str("resumes", payload.resume_id, "profile_id"))
+    else:
+        source_content = _row_json("profiles", payload.profile_id, "profile_json")
+        profile_id = payload.profile_id
+
     metadata = {}
-    if payload.kind == "tailored":
-        if payload.role_analysis_id is None:
-            raise HTTPException(status_code=400, detail="role_analysis_id is required for tailored")
+
+    # Tailored path: role_analysis_id is provided (works for any kind)
+    if payload.role_analysis_id is not None:
         role = _row_json("role_analyses", payload.role_analysis_id, "analysis_json")
-        result = await generate_tailored_resume(profile, role)
+        format_style = "human" if payload.kind == "human" else "ats"
+        result = await generate_tailored_resume(source_content, role, format_style=format_style, custom_instructions=payload.custom_instructions)
         markdown = result["markdown"]
         metadata = {k: v for k, v in result.items() if k != "markdown"}
-        title = "Tailored Resume"
+        if payload.kind == "human":
+            title = "Tailored Human-Friendly Resume"
+        else:
+            title = "Tailored ATS Resume"
     else:
-        ats, human = await generate_generic_resumes(profile)
+        # Base resume path: no role analysis
+        if isinstance(source_content, str):
+            # If source is already a resume and no tailoring, just re-format it? Or return as is?
+            # Actually, base resumes are meant to be generated from profiles.
+            ats, human = await generate_generic_resumes(_row_json("profiles", profile_id, "profile_json"), custom_instructions=payload.custom_instructions)
+        else:
+            ats, human = await generate_generic_resumes(source_content, custom_instructions=payload.custom_instructions)
         markdown = ats if payload.kind == "ats" else human
         title = "ATS Resume" if payload.kind == "ats" else "Human-Friendly Resume"
 
@@ -461,7 +496,7 @@ async def generate_resume(payload: ResumeGenerateRequest) -> dict:
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                payload.profile_id,
+                profile_id,
                 payload.role_analysis_id,
                 payload.kind,
                 title,
@@ -472,7 +507,7 @@ async def generate_resume(payload: ResumeGenerateRequest) -> dict:
         )
     return {
         "id": int(cur.lastrowid),
-        "profile_id": payload.profile_id,
+        "profile_id": profile_id,
         "role_analysis_id": payload.role_analysis_id,
         "kind": payload.kind,
         "title": title,

@@ -95,6 +95,13 @@ export const api = {
     }
     return response.json() as Promise<{ documents: Array<{ id: number; name: string; characters: number }> }>;
   },
+  extractText: async (files: File[]) => {
+    const form = new FormData();
+    files.forEach((file) => form.append("files", file));
+    const response = await fetch(`${API_BASE}/api/utils/extract-text`, { method: "POST", body: form });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json() as Promise<{ files: Array<{ name: string; text: string }> }>;
+  },
   buildProfile: (document_ids: number[], raw_text = "") =>
     request<{ id: number; profile: Record<string, unknown> }>("/api/profile/build", {
       method: "POST",
@@ -130,7 +137,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ profile_id })
     }),
-  generateResume: (body: { profile_id: number; kind: "ats" | "human" | "tailored"; role_analysis_id?: number | null }) =>
+  generateResume: (body: { profile_id?: number | null; resume_id?: number | null; kind: "ats" | "human" | "tailored"; role_analysis_id?: number | null; custom_instructions?: string | null }) =>
     request<SavedResume>("/api/resume/generate", {
       method: "POST",
       body: JSON.stringify(body)

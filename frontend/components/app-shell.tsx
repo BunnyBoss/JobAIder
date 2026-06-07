@@ -22,9 +22,9 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/user-profile", label: "User Profile", icon: UserRound },
   { href: "/role-analysis", label: "Role Analysis", icon: FileSearch },
-  { href: "/resume-studio", label: "Resume Studio", icon: FileText },
   { href: "/gap-analysis", label: "Gap Analysis", icon: Gauge },
   { href: "/improvement-plan", label: "Improvement Plan", icon: Sparkles },
+  { href: "/resume-studio", label: "Resume Studio", icon: FileText },
   { href: "/interview-prep", label: "Interview Prep", icon: Bot },
   { href: "/settings", label: "Settings", icon: Settings }
 ];
@@ -43,8 +43,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex h-16 items-center gap-2 border-b px-5">
           <BarChart3 className="h-5 w-5 text-primary" />
           <div>
-            <div className="font-semibold">JobRadar</div>
-            <div className="text-xs text-muted-foreground">Local-first assistant</div>
+            <div className="font-semibold">JobAIder</div>
+            <div className="text-xs text-muted-foreground">AI Job Assistant</div>
           </div>
         </div>
         <div className="border-b p-3">
@@ -78,7 +78,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
       <div className="md:pl-64">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur md:hidden">
-          <Link href="/dashboard" className="font-semibold">JobRadar</Link>
+          <Link href="/dashboard" className="font-semibold">JobAIder</Link>
           <BarChart3 className="h-5 w-5" />
         </header>
         <main className="mx-auto max-w-6xl p-4 md:p-8">{children}</main>

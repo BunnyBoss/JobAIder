@@ -5,7 +5,7 @@ import { Pencil, Trash2, X, Download, FileText, Wand2, User, Briefcase, Layout, 
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { PageHeader } from "@/components/page-header";
-import { ProfileSelect, RoleSelect } from "@/components/saved-selectors";
+import { ProfileSelect, RoleSelect, ResumeSelect } from "@/components/saved-selectors";
 import { StatusPanel } from "@/components/status-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,19 +25,25 @@ export default function ResumeStudioPage() {
   const profiles = useQuery({ queryKey: ["profiles"], queryFn: api.listProfiles });
   const roles = useQuery({ queryKey: ["roles"], queryFn: api.listRoles });
   const resumes = useQuery({ queryKey: ["resumes"], queryFn: api.listResumes });
+  const [sourceType, setSourceType] = useState<"profile" | "resume">("profile");
   const [profileId, setProfileId] = useState<number | null>(null);
+  const [resumeId, setResumeId] = useState<number | null>(null);
   const [roleId, setRoleId] = useState<number | null>(null);
-  const [mode, setMode] = useState<ResumeKind | null>(null);
+  const [isTailored, setIsTailored] = useState<boolean>(false);
+  const [format, setFormat] = useState<"ats" | "human" | null>(null);
+  const [customInstructions, setCustomInstructions] = useState("");
   const [selected, setSelected] = useState<SavedResume | null>(null);
   const [editorText, setEditorText] = useState("");
   const [isEditing, setIsEditing] = useState(false);
 
   const generate = useMutation({
-    mutationFn: (kind: ResumeKind) =>
+    mutationFn: (f: "ats" | "human") =>
       api.generateResume({
-        profile_id: Number(profileId),
-        kind,
-        role_analysis_id: kind === "tailored" ? roleId : null
+        profile_id: sourceType === "profile" ? Number(profileId) : null,
+        resume_id: sourceType === "resume" ? Number(resumeId) : null,
+        kind: f,
+        role_analysis_id: isTailored ? roleId : null,
+        custom_instructions: customInstructions.trim() || null
       }),
     onSuccess: async (resume) => {
       setSelected(resume);
@@ -79,50 +85,97 @@ export default function ResumeStudioPage() {
         <CardContent className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2 bg-white/50 dark:bg-slate-900/50 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
             <div className="space-y-3">
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2"><User className="w-4 h-4 text-slate-400"/> Source Profile</label>
-              <ProfileSelect profiles={profiles.data?.profiles ?? []} value={profileId} onChange={setProfileId} />
-              {!profiles.data?.profiles.length && <div className="text-xs text-red-500 font-medium mt-1">Build a profile in User Profile first.</div>}
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2"><Target className="w-4 h-4 text-slate-400"/> Source Document</label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button 
+                  variant={sourceType === "profile" ? "default" : "outline"} 
+                  onClick={() => setSourceType("profile")} 
+                  className="w-full text-xs sm:text-sm"
+                >
+                  <User className="w-4 h-4 mr-1.5 hidden sm:inline" /> Master Profile
+                </Button>
+                <Button 
+                  variant={sourceType === "resume" ? "default" : "outline"} 
+                  onClick={() => setSourceType("resume")} 
+                  className="w-full text-xs sm:text-sm"
+                >
+                  <FileText className="w-4 h-4 mr-1.5 hidden sm:inline" /> Saved Resume
+                </Button>
+              </div>
+              <div className="pt-2">
+                {sourceType === "profile" ? (
+                  <>
+                    <ProfileSelect profiles={profiles.data?.profiles ?? []} value={profileId} onChange={setProfileId} />
+                    {!profiles.data?.profiles.length && <div className="text-xs text-red-500 font-medium mt-1">Build a profile in User Profile first.</div>}
+                  </>
+                ) : (
+                  <ResumeSelect resumes={resumes.data?.resumes ?? []} value={resumeId} onChange={setResumeId} />
+                )}
+              </div>
             </div>
 
             <div className="space-y-3">
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2"><Settings className="w-4 h-4 text-slate-400"/> Resume Format</label>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2"><Settings className="w-4 h-4 text-slate-400"/> Resume Type</label>
+              <div className="grid grid-cols-2 gap-2">
                 <Button 
-                  variant={mode === "ats" ? "default" : "outline"} 
-                  onClick={() => setMode("ats")} 
+                  variant={!isTailored ? "default" : "outline"} 
+                  onClick={() => setIsTailored(false)} 
                   className="w-full text-xs sm:text-sm"
                 >
-                  <FileCode2 className="w-4 h-4 mr-1.5 hidden sm:inline" /> ATS Friendly
+                  <FileText className="w-4 h-4 mr-1.5 hidden sm:inline" /> Base Resume
                 </Button>
                 <Button 
-                  variant={mode === "human" ? "default" : "outline"} 
-                  onClick={() => setMode("human")} 
+                  variant={isTailored ? "default" : "outline"} 
+                  onClick={() => setIsTailored(true)} 
                   className="w-full text-xs sm:text-sm"
                 >
-                  <FileText className="w-4 h-4 mr-1.5 hidden sm:inline" /> Human Friendly
-                </Button>
-                <Button 
-                  variant={mode === "tailored" ? "default" : "outline"} 
-                  onClick={() => setMode("tailored")} 
-                  className="w-full text-xs sm:text-sm col-span-2 lg:col-span-1"
-                >
-                  <Target className="w-4 h-4 mr-1.5 hidden sm:inline" /> Tailored
+                  <Target className="w-4 h-4 mr-1.5 hidden sm:inline" /> Tailored Resume
                 </Button>
               </div>
             </div>
           </div>
 
-          {mode === "tailored" && (
+          {isTailored && (
             <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-3 animate-in fade-in zoom-in-95 duration-200">
               <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2"><Briefcase className="w-4 h-4 text-primary"/> Target Role Analysis</label>
               <RoleSelect roles={roles.data?.roles ?? []} value={roleId} onChange={setRoleId} />
             </div>
           )}
 
+          <div className="space-y-3">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2"><Pencil className="w-4 h-4 text-slate-400"/> Custom Instructions (Optional)</label>
+            <Textarea 
+              placeholder="e.g. 'Keep it strictly under 1 page', 'Highlight my experience in AWS more prominently', 'Tone should be highly executive'"
+              className="min-h-[80px]"
+              value={customInstructions}
+              onChange={(e) => setCustomInstructions(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-3">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2"><Settings className="w-4 h-4 text-slate-400"/> Output Format</label>
+            <div className="grid grid-cols-2 gap-2 max-w-md">
+              <Button 
+                variant={format === "ats" ? "default" : "outline"} 
+                onClick={() => setFormat("ats")} 
+                className="w-full text-xs sm:text-sm"
+              >
+                <FileCode2 className="w-4 h-4 mr-1.5 hidden sm:inline" /> ATS Friendly
+              </Button>
+              <Button 
+                variant={format === "human" ? "default" : "outline"} 
+                onClick={() => setFormat("human")} 
+                className="w-full text-xs sm:text-sm"
+              >
+                <FileText className="w-4 h-4 mr-1.5 hidden sm:inline" /> Human Friendly
+              </Button>
+            </div>
+          </div>
+
           <Button 
             size="lg" 
-            onClick={() => mode && generate.mutate(mode)} 
-            disabled={!profileId || !mode || (mode === "tailored" && !roleId) || generate.isPending} 
+            onClick={() => format && generate.mutate(format)} 
+            disabled={(sourceType === "profile" ? !profileId : !resumeId) || !format || (isTailored && !roleId) || generate.isPending} 
             className="w-full sm:w-auto gap-2"
           >
             {generate.isPending ? "Generating..." : "Generate Resume"} <Sparkles className="w-4 h-4" />

@@ -1,2 +1,1 @@
-"""JobRadar backend package."""
-
+"""JobAIder backend package."""

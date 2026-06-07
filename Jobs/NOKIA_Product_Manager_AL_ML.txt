@@ -16,13 +16,4 @@ HOW YOU WILL CONTRIBUTE AND WHAT YOU WILL LEARN
 KEY SKILLS AND EXPERIENCE
 
 You have:
-• Bachelor's or Master's degree in Computer Science, Engineering with10-15 years of experience as a Product Manager or Owner, preferably in AI/ML or technology platforms
-• Strong understanding of GenAI technologies and development processes
-• Proficiency in Agile methodologies and product management tools
-• Excellent problem-solving, organizational, and analytical skills
-
-It would be nice if you also had:
-• Experience in managing AI/ML platforms or tools
-• Familiarity with software development and data science workflows
-• Leadership experience in a technical product management role
 • Ability to translate complex technical concepts into clear, actionable plans

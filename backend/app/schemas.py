@@ -86,9 +86,11 @@ class ResumeRequest(BaseModel):
 
 
 class ResumeGenerateRequest(BaseModel):
-    profile_id: int
+    profile_id: int | None = None
+    resume_id: int | None = None
     kind: Literal["ats", "human", "tailored"]
     role_analysis_id: int | None = None
+    custom_instructions: str | None = None
 
 
 class ResumeResponse(BaseModel):

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Trash2, Zap, BookOpen, Rocket, Target, Clock } from "lucide-react";
+import { CheckCircle2, Trash2, Zap, BookOpen, Rocket, Target, Clock, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { StatusPanel } from "@/components/status-panel";
@@ -99,16 +99,14 @@ export default function ImprovementPlanPage() {
               </button>
             ))}
           </div>
-          {selectedGap && (
-            <Button
-              onClick={() => generate.mutate(selectedGapId!)}
-              disabled={generate.isPending}
-              className="w-full"
-            >
-              <Zap className="h-4 w-4 mr-2" />
-              Generate Improvement Plan
-            </Button>
-          )}
+          <Button
+            onClick={() => generate.mutate(selectedGapId!)}
+            disabled={!selectedGapId || generate.isPending}
+            className="w-full"
+          >
+            <Zap className="h-4 w-4 mr-2" />
+            {generate.isPending ? "Generating..." : "Generate Improvement Plan"}
+          </Button>
           <StatusPanel
             loading={generate.isPending}
             error={generate.error}
@@ -167,8 +165,13 @@ export default function ImprovementPlanPage() {
 
       {viewingPlan && (
         <Card className="mt-4">
-          <CardHeader>
-            <CardTitle>Improvement Plan #{viewingPlan.id}</CardTitle>
+          <CardHeader className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
+            <CardTitle className="flex items-center justify-between gap-3 text-lg">
+              <span className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary" /> Improvement Plan #{viewingPlan.id}
+              </span>
+              <Button variant="ghost" size="icon" onClick={() => setViewingPlanId(null)} className="h-8 w-8 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800"><X className="h-4 w-4" /></Button>
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-8">
             {/* Top Stats */}

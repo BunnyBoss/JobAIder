@@ -1,10 +1,10 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Pencil, Trash2, X, BarChart3, AlertCircle, CheckCircle2, ChevronRight, Target, FileText } from "lucide-react";
+import { Pencil, Trash2, X, BarChart3, AlertCircle, CheckCircle2, ChevronRight, Target, FileText, User, Briefcase, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
-import { ResumeSelect, RoleSelect } from "@/components/saved-selectors";
+import { ProfileSelect, ResumeSelect, RoleSelect } from "@/components/saved-selectors";
 import { StatusPanel } from "@/components/status-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,8 +30,11 @@ const getSkillsList = (skillsObj: any): string[] => {
 
 export default function GapAnalysisPage() {
   const roles = useQuery({ queryKey: ["roles"], queryFn: api.listRoles });
+  const profiles = useQuery({ queryKey: ["profiles"], queryFn: api.listProfiles });
   const resumes = useQuery({ queryKey: ["resumes"], queryFn: api.listResumes });
   const gaps = useQuery({ queryKey: ["gaps"], queryFn: api.listGaps });
+  const [sourceType, setSourceType] = useState<"profile" | "resume">("resume");
+  const [profileId, setProfileId] = useState<number | null>(null);
   const [resumeId, setResumeId] = useState<number | null>(null);
   const [roleId, setRoleId] = useState<number | null>(null);
   const [selected, setSelected] = useState<SavedGap | null>(null);
@@ -39,10 +42,11 @@ export default function GapAnalysisPage() {
   const [isEditingJson, setIsEditingJson] = useState(false);
 
   const gap = useMutation({
-    mutationFn: () => api.gapByResume(Number(resumeId), Number(roleId)),
-    onSuccess: async (data) => {
-      const selectedResume = resumes.data?.resumes.find((resume) => resume.id === resumeId);
-      const saved = { id: data.id, profile_id: Number(selectedResume?.profile_id ?? 0), role_analysis_id: Number(roleId), analysis: data.analysis, created_at: new Date().toISOString() };
+    mutationFn: () => {
+      if (sourceType === "profile") return api.gap(Number(profileId), Number(roleId));
+      return api.gapByResume(Number(resumeId), Number(roleId));
+    },
+    onSuccess: async () => {
       await gaps.refetch();
     }
   });
@@ -75,13 +79,43 @@ export default function GapAnalysisPage() {
         <CardHeader><CardTitle className="flex items-center gap-2 text-primary"><BarChart3 className="h-5 w-5" /> Compare Resume vs Role</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            Select a saved resume and a target role to automatically generate a detailed gap analysis and get actionable recommendations.
+            Select a master profile or a saved resume, and a target role, to automatically generate a detailed gap analysis and get actionable recommendations.
           </p>
           <div className="grid gap-4 lg:grid-cols-2 bg-white/50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-            <ResumeSelect resumes={resumes.data?.resumes ?? []} value={resumeId} onChange={setResumeId} />
-            <RoleSelect roles={roles.data?.roles ?? []} value={roleId} onChange={setRoleId} />
+            <div className="flex flex-col space-y-3">
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2"><Target className="w-4 h-4 text-slate-400"/> Source Document</label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button 
+                  variant={sourceType === "profile" ? "default" : "outline"} 
+                  onClick={() => setSourceType("profile")} 
+                  className="w-full text-xs sm:text-sm"
+                >
+                  <User className="w-4 h-4 mr-1.5 hidden sm:inline" /> Master Profile
+                </Button>
+                <Button 
+                  variant={sourceType === "resume" ? "default" : "outline"} 
+                  onClick={() => setSourceType("resume")} 
+                  className="w-full text-xs sm:text-sm"
+                >
+                  <FileText className="w-4 h-4 mr-1.5 hidden sm:inline" /> Saved Resume
+                </Button>
+              </div>
+              <div className="pt-2 flex-1 flex flex-col justify-end">
+                {sourceType === "profile" ? (
+                  <ProfileSelect profiles={profiles.data?.profiles ?? []} value={profileId} onChange={setProfileId} />
+                ) : (
+                  <ResumeSelect resumes={resumes.data?.resumes ?? []} value={resumeId} onChange={setResumeId} />
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col space-y-3">
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2"><Briefcase className="w-4 h-4 text-slate-400"/> Target Role Analysis</label>
+              <div className="flex-1 flex flex-col justify-end">
+                <RoleSelect roles={roles.data?.roles ?? []} value={roleId} onChange={setRoleId} />
+              </div>
+            </div>
           </div>
-          <Button size="lg" onClick={() => gap.mutate()} disabled={gap.isPending || !resumeId || !roleId} className="w-full sm:w-auto gap-2">
+          <Button size="lg" onClick={() => gap.mutate()} disabled={gap.isPending || (sourceType === "profile" ? !profileId : !resumeId) || !roleId} className="w-full sm:w-auto gap-2">
             {gap.isPending ? "Analyzing Gaps..." : "Run And Save Gap Analysis"} <ChevronRight className="w-4 h-4" />
           </Button>
           <StatusPanel loading={gap.isPending} error={gap.error} success={gap.data ? `Success! Gap Analysis saved below.` : undefined} />
@@ -159,6 +193,40 @@ export default function GapAnalysisPage() {
 
             {!isEditingJson ? (
               <div className="space-y-6">
+                {typeof selected.analysis?.suitability_summary === "string" && (
+                  <div className="bg-blue-50/70 dark:bg-blue-950/20 p-4 rounded-xl border border-blue-200 dark:border-blue-900/40">
+                    <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-300 uppercase tracking-wider mb-2 flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Suitability Summary</h3>
+                    <p className="text-sm text-blue-700 dark:text-blue-400 leading-relaxed">{String(selected.analysis.suitability_summary)}</p>
+                  </div>
+                )}
+
+                {safeArray(selected.analysis?.strengths).length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Key Strengths</h3>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {safeArray(selected.analysis.strengths).map((s: any, i: number) => (
+                        <div key={i} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300 bg-green-50/50 dark:bg-green-950/20 p-3 rounded-lg border border-green-100 dark:border-green-900/30">
+                          <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
+                          <span className="leading-relaxed">{String(s)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Matching Skills</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {getSkillsList(selected.analysis?.matching_skills).length > 0 ? (
+                      getSkillsList(selected.analysis?.matching_skills).map((s, i) => (
+                        <span key={i} className="bg-green-50 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900/50 px-2.5 py-1 rounded-md text-sm font-medium">{s}</span>
+                      ))
+                    ) : (
+                      <span className="text-slate-500 text-sm">No matching skills identified</span>
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Missing Skills</h3>
                   <div className="flex flex-wrap gap-2">

@@ -41,6 +41,8 @@ export default function RoleAnalysisPage() {
     },
     onSuccess: async () => {
       setContent("");
+      setFileContent("");
+      setFileNames([]);
       await roles.refetch();
     }
   });
@@ -68,11 +70,23 @@ export default function RoleAnalysisPage() {
     }
   });
 
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [fileContent, setFileContent] = useState<string>("");
+  const [fileNames, setFileNames] = useState<string[]>([]);
+
   async function handleFileUpload(files: File[]) {
-    for (const file of files) {
-      const text = await file.text();
-      setContent(text);
-      analyze.mutate(text);
+    if (files.length === 0) return;
+    try {
+      setIsExtracting(true);
+      const res = await api.extractText(files);
+      const combined = res.files.map(f => f.text).join("\n\n");
+      setFileContent(prev => prev ? `${prev}\n\n${combined}` : combined);
+      setFileNames(prev => [...prev, ...files.map(f => f.name)]);
+    } catch (err) {
+      console.error("Failed to extract text:", err);
+      alert("Failed to read file contents.");
+    } finally {
+      setIsExtracting(false);
     }
   }
 
@@ -114,17 +128,32 @@ export default function RoleAnalysisPage() {
                   accept=".pdf,.docx,.md,.txt"
                   className="hidden"
                   onChange={(event) => handleFileUpload(Array.from(event.target.files ?? []))}
+                  disabled={isExtracting}
                 />
               </label>
             </div>
+            {isExtracting && <div className="text-sm text-primary mt-2 animate-pulse">Extracting text from files...</div>}
+            {fileNames.length > 0 && !isExtracting && (
+              <div className="mt-3 text-sm text-green-600 dark:text-green-500 font-medium">
+                Loaded {fileNames.length} file(s): {fileNames.join(", ")}
+              </div>
+            )}
           </div>
           <Textarea
             value={content}
             onChange={(event) => setContent(event.target.value)}
-            placeholder="Or paste job description, posting, company information, or research papers..."
+            placeholder="Paste additional job description, notes, or company context here..."
             className="min-h-[120px] bg-white dark:bg-slate-950 resize-y"
           />
-          <Button size="lg" className="w-full sm:w-auto gap-2" onClick={() => analyze.mutate(content)} disabled={!content || analyze.isPending}>
+          <Button 
+            size="lg" 
+            className="w-full sm:w-auto gap-2" 
+            onClick={() => {
+              const combined = [fileContent, content].filter(Boolean).join("\n\n");
+              analyze.mutate(combined);
+            }} 
+            disabled={(!content && !fileContent) || analyze.isPending}
+          >
             {analyze.isPending ? "Analyzing..." : "Extract Insights"} <ChevronRight className="w-4 h-4" />
           </Button>
           <StatusPanel

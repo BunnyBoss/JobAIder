@@ -1,2 +1,1 @@
-"""JobRadar domain modules."""
-
+"""JobAIder domain modules."""

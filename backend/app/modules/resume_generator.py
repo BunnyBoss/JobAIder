@@ -119,13 +119,14 @@ def fallback_human_resume(profile: dict[str, Any]) -> str:
 """
 
 
-async def generate_generic_resumes(profile: dict[str, Any]) -> tuple[str, str]:
+async def generate_generic_resumes(profile: dict[str, Any], custom_instructions: str | None = None) -> tuple[str, str]:
+    instruction_block = f"\nUser Custom Instructions:\n{custom_instructions}\n" if custom_instructions else ""
     prompt = f"""
 Generate two Markdown resumes from this professional profile:
 1. ats_resume: ATS optimized, plain formatting, keyword supported.
 2. human_resume: human-friendly, polished, readable.
 Return JSON with keys ats_resume and human_resume.
-
+{instruction_block}
 Profile:
 {profile}
 """
@@ -143,21 +144,48 @@ Profile:
     return ats, human
 
 
-async def generate_tailored_resume(profile: dict[str, Any], role: dict[str, Any]) -> dict[str, Any]:
-    fallback_markdown = fallback_ats_resume(profile) + "\n\n## Tailoring Notes\n\n- Align bullets to the role requirements.\n"
+async def generate_tailored_resume(
+    source_content: dict[str, Any] | str,
+    role: dict[str, Any],
+    format_style: str = "ats",
+    custom_instructions: str | None = None,
+) -> dict[str, Any]:
+    if isinstance(source_content, str):
+        fallback_markdown = source_content + "\n\n## Tailoring Notes\n\n- Align bullets to the role requirements.\n"
+    else:
+        fallback_markdown = (
+            fallback_ats_resume(source_content) if format_style == "ats" else fallback_human_resume(source_content)
+        ) + "\n\n## Tailoring Notes\n\n- Align bullets to the role requirements.\n"
     fallback = {
         "markdown": fallback_markdown,
         "added_keywords": _as_list(role.get("required_skills"))[:10],
         "rewritten_sections": ["Summary", "Skills", "Experience"],
         "match_improvements": ["Promote evidence that maps to required skills."],
     }
+
+    if format_style == "human":
+        style_instruction = (
+            "Format: Human-friendly, polished, and narrative. "
+            "Use engaging language, clear section headers, and a professional but readable tone. "
+            "Prioritize readability for human recruiters over keyword density."
+        )
+    else:
+        style_instruction = (
+            "Format: ATS-optimized, plain formatting. "
+            "Use standard section headers (Summary, Skills, Experience, Education). "
+            "Maximize keyword matching with the role requirements. "
+            "Keep formatting simple for automated parsing systems."
+        )
+
+    instruction_block = f"\nUser Custom Instructions:\n{custom_instructions}\n" if custom_instructions else ""
     prompt = f"""
-Create a role-specific Markdown resume from the professional profile and role analysis.
+Create a role-specific Markdown resume from the provided source material and role analysis.
+{style_instruction}
 Return JSON with: markdown, added_keywords, rewritten_sections, match_improvements.
 Do not invent credentials.
-
-Profile:
-{profile}
+{instruction_block}
+Source Material:
+{source_content}
 
 Role:
 {role}
@@ -170,3 +198,4 @@ Role:
     # Ensure markdown is a string
     result["markdown"] = _to_string(result.get("markdown", fallback["markdown"]))
     return result
+

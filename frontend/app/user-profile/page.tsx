@@ -51,6 +51,20 @@ const getSkillsList = (profileObj: any): string[] => {
   return [];
 };
 
+const renderListItem = (item: any): string => {
+  if (!item) return "";
+  if (typeof item === "string") return item;
+  if (typeof item === "object") {
+    const val = item.title || item.name || item.content || item.note || item.text || item.description || item.value;
+    if (val) return String(val);
+    const values = Object.values(item)
+      .filter((v: any) => typeof v === "string" || typeof v === "number")
+      .join(" - ");
+    return values || JSON.stringify(item);
+  }
+  return String(item);
+};
+
 export default function UserProfilePage() {
   const [vaultPath, setVaultPath] = useState("");
   const [rawText, setRawText] = useState("");
@@ -240,7 +254,7 @@ export default function UserProfilePage() {
               <div className="space-y-6">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Summary</h3>
-                  <p className="text-slate-800 dark:text-slate-200 leading-relaxed">{selectedProfile.profile.summary || selectedProfile.summary || "No summary provided."}</p>
+                  <p className="text-slate-800 dark:text-slate-200 leading-relaxed">{String(selectedProfile.profile?.summary || selectedProfile.summary || "No summary provided.")}</p>
                 </div>
                 
                 <div className="grid gap-6 sm:grid-cols-2">
@@ -297,7 +311,7 @@ export default function UserProfilePage() {
                     </summary>
                     <div className="p-4 space-y-2 bg-white dark:bg-slate-950">
                       {safeArray(selectedProfile.profile.publications).map((pub: any, i: number) => (
-                        <div key={i} className="text-sm text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800 pb-2 last:border-0 last:pb-0">{String(pub.title || pub.name || pub)}</div>
+                        <div key={i} className="text-sm text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800 pb-2 last:border-0 last:pb-0">{renderListItem(pub)}</div>
                       ))}
                     </div>
                   </details>
@@ -310,7 +324,7 @@ export default function UserProfilePage() {
                     </summary>
                     <div className="p-4 space-y-2 bg-white dark:bg-slate-950">
                       {safeArray(selectedProfile.profile.certifications).map((cert: any, i: number) => (
-                        <div key={i} className="text-sm text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800 pb-2 last:border-0 last:pb-0">{String(cert.title || cert.name || cert)}</div>
+                        <div key={i} className="text-sm text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800 pb-2 last:border-0 last:pb-0">{renderListItem(cert)}</div>
                       ))}
                     </div>
                   </details>
@@ -323,7 +337,7 @@ export default function UserProfilePage() {
                     </summary>
                     <div className="p-4 space-y-2 bg-white dark:bg-slate-950">
                       {safeArray(selectedProfile.profile.career_notes).map((note: any, i: number) => (
-                        <div key={i} className="text-sm text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800 pb-2 last:border-0 last:pb-0">{String(note.title || note.content || note)}</div>
+                        <div key={i} className="text-sm text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800 pb-2 last:border-0 last:pb-0">{renderListItem(note)}</div>
                       ))}
                     </div>
                   </details>
