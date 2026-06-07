@@ -36,30 +36,11 @@ Navigate to the backend directory and set up the Python environment:
 
 ```bash
 cd backend
-
-# Option A: Using Conda (Recommended)
 conda create -n JobAIder python=3.13 -y
-conda activate jobaider
+conda activate JobAIder
 pip install -r requirements.txt
 
-# Option B: Using venv
-python -m venv venv
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-pip install -r requirements.txt
 ```
-
-#### Environment Variables
-Create a `.env` file in the `backend` directory (you can copy `.env.example`):
-
-```bash
-cp .env.example .env
-```
-
-Configure the following variables in your `.env` file:
-- `MODEL_NAME`: The model to use (e.g., `gpt-4o-mini`, `llama3`).
-- `OPENAI_API_KEY`: Your API key for the LLM provider.
-- `OPENAI_BASE_URL`: Base URL for your LLM provider (default: `https://api.openai.com/v1`).
-- `JOBAIDER_DB_PATH`: Path to the SQLite database (default: `./jobaider.db`).
 
 ### 2. Frontend Setup
 
@@ -126,5 +107,4 @@ JobAIder/
 ## Troubleshooting
 
 - **Database Issues:** If you encounter database errors, ensure the `JOBAIDER_DB_PATH` is correct and the directory is writable. You can delete the `jobaider.db` file to start fresh.
-- **LLM Connection Errors:** Verify your `OPENAI_API_KEY` and `OPENAI_BASE_URL` in the `backend/.env` file or in the frontend Settings page.
 - **Port Conflicts:** Ensure ports 3000 and 8000 are not being used by other applications.

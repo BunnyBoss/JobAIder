@@ -16,7 +16,7 @@ backend/jobradar.db
 backend/**/*.pyc
 backend/**/__pycache__/
 backend/.pytest_cache/
-backend/.venv/
+backend/.venv
 backend/venv/
 backend/env/
 backend/jobradar_backend.egg-info/
