@@ -30,12 +30,20 @@ JobAIder is a powerful, production-ready AI job application assistant. It helps 
 - Python (v3.10+)
 - npm or yarn
 
+
+### Clone the repository
+
+```bash
+git clone https://github.com/BunnyBoss/JobAIder.git
+cd JobAIder/
+```
+
 ### 1. Backend Setup
 
 Navigate to the backend directory and set up the Python environment:
 
 ```bash
-cd backend
+cd backend/
 conda create -n JobAIder python=3.13 -y
 conda activate JobAIder
 pip install -r requirements.txt
@@ -47,7 +55,7 @@ pip install -r requirements.txt
 Navigate to the frontend directory and install dependencies:
 
 ```bash
-cd ../frontend
+cd ../frontend/
 npm install
 ```
 
@@ -63,7 +71,7 @@ In the first terminal, run the FastAPI server:
 
 ```bash
 cd backend
-source venv/bin/activate # If using a virtual environment
+conda activate JobAIder
 uvicorn app.main:app --reload
 ```
 The backend API will be available at `http://localhost:8000`.
@@ -83,6 +91,7 @@ The frontend application will be available at `http://localhost:3000`.
 ## Usage Guide
 
 For a detailed walkthrough of each section and how to get the most out of JobAIder, please refer to the [Usage Guide](docs/USAGE.md).
+For complete reposity architecture: [architecture details](docs/full_repository_architecture.md)
 
 ---
 
