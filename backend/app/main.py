@@ -234,12 +234,20 @@ async def build_master_profile(payload: BuildProfileRequest) -> dict:
     profile = await build_profile("\n\n".join(parts))
     timestamp = now_iso()
     with get_db() as conn:
+        # Ensure summary is a string (handle case where it might be a dict)
+        summary = profile.get("summary", "")
+        if isinstance(summary, dict):
+            # Extract text content from dict if available, otherwise use JSON
+            summary = summary.get("text") or summary.get("content") or summary.get("description") or encode_json(summary)
+        if not isinstance(summary, str):
+            summary = str(summary) if summary else ""
+        
         cur = conn.execute(
             """
             INSERT INTO profiles (name, summary, profile_json, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?)
             """,
-            ("Master Profile", profile.get("summary", ""), encode_json(profile), timestamp, timestamp),
+            ("Master Profile", summary, encode_json(profile), timestamp, timestamp),
         )
         profile_id = int(cur.lastrowid)
     return {"id": profile_id, "profile": profile}
@@ -296,7 +304,13 @@ def get_profile(profile_id: int) -> dict:
 
 @app.put("/api/profile/{profile_id}")
 def update_profile(profile_id: int, payload: ProfileUpdateRequest) -> dict:
-    summary = str(payload.profile.get("summary", ""))
+    summary = payload.profile.get("summary", "")
+    # Ensure summary is a string (handle case where it might be a dict)
+    if isinstance(summary, dict):
+        summary = summary.get("text") or summary.get("content") or summary.get("description") or encode_json(summary)
+    if not isinstance(summary, str):
+        summary = str(summary) if summary else ""
+    
     with get_db() as conn:
         row = conn.execute("SELECT id FROM profiles WHERE id = ?", (profile_id,)).fetchone()
         if not row:

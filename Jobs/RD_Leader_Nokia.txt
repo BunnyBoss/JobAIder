@@ -1,0 +1,85 @@
+R&D Leader
+
+company: Nokia India
+India (Hybrid)
+As a  R&D Leader, strong technical background in AI, practical experience with AI-powered development tools like Cursor and GitHub Copilot, Low-code/No-code platforms and proven leadership in driving technological adoption and innovation within an R&D environment. The successful candidate will be instrumental in refining strategy, enhancing best practices, and accelerating the delivery of cutting-edge solutions across the department.
+
+Your responsibilities
+CoE Leadership & Strategy:
+Build, mentor, and lead a high-performing team of LCNC developers and AI specialists, fostering their growth and expertise.
+AI Integration & Innovation:
+Drive the strategic integration of AI capabilities into LCNC platforms and developed applications.
+Identify, evaluate, and pilot emerging AI technologies and trends relevant to LCNC development.
+Champion the use of AI assistants (e.g., Cursor, GitHub Copilot) to enhance developer productivity, code quality, and innovation across R&D teams.
+Develop and implement training programs and guidelines for effective utilization of AI coding assistants.
+Low-code/No-code Application Development:
+Oversee the end-to-end lifecycle of application development using LCNC platforms, from ideation to deployment and maintenance.
+Collaborate with various R&D teams and business units to identify opportunities for LCNC solutions that address critical business needs.
+Ensure the scalability, security, and performance of applications developed within the CoE.
+Knowledge Sharing & Evangelism:
+Act as a subject matter expert and evangelist for AI and LCNC technologies.
+Foster a culture of innovation, continuous learning, and collaboration across the unit.
+Your skills and experience
+Must-Have:
+
+Bachelor's or Master's degree in Computer Science, Engineering, Artificial Intelligence, or a related technical field.
+10+ years of experience in R&D, software development, or technology leadership roles, with at least 3-5 years in a leadership capacity.
+Demonstrated expertise in Artificial Intelligence (AI) concepts, machine learning and their practical application in software development.
+Demonstrated expertise in Software Architecture and Design and programming languages viz. Python, Java
+Hands-on experience and proficiency with AI-powered coding assistants such as Cursor and GitHub Copilot and Low-code/No-code platforms.
+Proven experience with leading Low-code/No-code platforms
+Strong understanding of software development methodologies (Agile, DevOps) and application architecture principles.
+Excellent leadership, communication, and interpersonal skills, with the ability to influence and drive change across an organization.
+Nice-To-Have:
+
+Experience leading and evolving an established Center of Excellence or similar innovation hub.
+Familiarity with cloud platforms (AWS, Azure, GCP) and their AI/ML services.
+Knowledge of data analytics and business intelligence tools.
+Experience in telecommunications domain or related high-tech industries.
+More information
+Some of our benefits:
+Flexible and hybrid working schemes
+A minimum of 90 days of Maternity and Paternity Leave, with the option to return to work within a year following the birth or adoption of a child (based on eligibility)
+Life insurance to all employees to provide peace of mind and financial security
+Well-being programs to support your mental and physical health
+Opportunities to join and receive support from Nokia Employee Resource Groups (NERGs)
+Employee Growth Solutions to support your personalized career & skills development
+Diverse pool of Coaches & Mentors to whom you have easy access
+A learning environment which promotes personal growth and professional development - for your role and beyond
+
+Learn about additional benefits in specific countries.
+About Us
+Advancing connectivity to secure a brighter world.
+Nokia is a global leader in connectivity for the AI era. With expertise across fixed, mobile and transport networks, powered by the innovation of Nokia Bell Labs, we’re advancing connectivity to secure a brighter world. 
+
+Learn more about life at Nokia.
+
+
+Our recruitment process
+
+We act inclusively and respect the uniqueness of people. Our employment decisions are made regardless of race, color, national or ethnic origin, religion, gender, sexual orientation, gender identity or expression, age, marital status, disability, protected veteran status or other characteristics protected by law. We are committed to a culture of inclusion built upon our core value of respect.
+
+If you’re interested in this role but don’t meet every listed requirement, we still encourage you to apply. Unique backgrounds, perspectives, and experiences enrich our teams, and you may be just the right candidate for this or another opportunity.
+
+The length of the recruitment process may vary depending on the specific role's requirements. We strive to ensure a smooth and inclusive experience for all candidates. Discover more about the recruitment process at Nokia. 
+
+Apply Now
+Job Info
+Job Category
+Applied R&D
+Posting Date
+06/01/2026
+Degree Level
+Bachelor’s degree
+Job Schedule
+Full time
+Job Type
+Experienced
+Job Identification
+33656
+Role Type
+People Manager
+Experience level
+Experienced
+Locations
+ Silver Oak, A Wing, Manyata Embassy Business Park, Bangalore, Karnataka, 560045, IN
