@@ -91,8 +91,55 @@ Profile:
 Role:
 {role}
 """
-    return await LLMProvider().chat_json(
+    result = await LLMProvider().chat_json(
         "You are a precise career gap analyst. Be helpful but do not flatter. Highlight both strengths and gaps objectively.",
         prompt,
         fallback,
     )
+    return _normalize_gap_analysis(result)
+
+
+def _normalize_gap_analysis(analysis: dict[str, Any]) -> dict[str, Any]:
+    """Normalize gap analysis to ensure all fields have correct types."""
+    def to_string(val):
+        """Convert value to string, extracting text from dicts if needed."""
+        if isinstance(val, str):
+            return val
+        if isinstance(val, dict):
+            return (val.get("description") or val.get("text") or val.get("content") or str(val)).strip()
+        if val is None:
+            return ""
+        return str(val).strip()
+    
+    def to_string_list(val):
+        """Convert value to list of strings."""
+        if isinstance(val, list):
+            return [to_string(item) for item in val if item]
+        if val:
+            return [to_string(val)]
+        return []
+    
+    def to_int(val, default=0):
+        """Convert value to int."""
+        try:
+            return int(val) if val is not None else default
+        except (ValueError, TypeError):
+            return default
+    
+    normalized = {
+        "overall_match_score": to_int(analysis.get("overall_match_score"), 0),
+        "skills_match": to_int(analysis.get("skills_match"), 0),
+        "experience_match": to_int(analysis.get("experience_match"), 0),
+        "domain_match": to_int(analysis.get("domain_match"), 0),
+        "leadership_match": to_int(analysis.get("leadership_match"), 0),
+        "matching_skills": to_string_list(analysis.get("matching_skills", [])),
+        "missing_skills": to_string_list(analysis.get("missing_skills", [])),
+        "strengths": to_string_list(analysis.get("strengths", [])),
+        "suitability_summary": to_string(analysis.get("suitability_summary", "")),
+        "evidence_mapping": analysis.get("evidence_mapping", []),  # Keep as-is, usually already structured
+        "quick_wins": to_string_list(analysis.get("quick_wins", [])),
+        "skills_to_learn": analysis.get("skills_to_learn", []),  # Keep as-is, usually already structured
+        "portfolio_projects": analysis.get("portfolio_projects", []),  # Keep as-is, usually already structured
+    }
+    return normalized
+

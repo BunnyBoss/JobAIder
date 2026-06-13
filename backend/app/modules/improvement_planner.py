@@ -38,6 +38,45 @@ def _fallback_plan(gap_analysis: dict[str, Any], profile: dict[str, Any], role: 
     }
 
 
+def _normalize_improvement_plan(plan: dict[str, Any]) -> dict[str, Any]:
+    """Normalize improvement plan to ensure all fields have correct types."""
+    def to_string(val):
+        """Convert value to string, extracting text from dicts if needed."""
+        if isinstance(val, str):
+            return val
+        if isinstance(val, dict):
+            return (val.get("description") or val.get("text") or val.get("content") or str(val)).strip()
+        if val is None:
+            return ""
+        return str(val).strip()
+    
+    def to_string_list(val):
+        """Convert value to list of strings."""
+        if isinstance(val, list):
+            return [to_string(item) for item in val if item]
+        if val:
+            return [to_string(val)]
+        return []
+    
+    def to_int(val, default=0):
+        """Convert value to int."""
+        try:
+            return int(val) if val is not None else default
+        except (ValueError, TypeError):
+            return default
+    
+    normalized = {
+        "overall_score": to_int(plan.get("overall_score"), 0),
+        "improvement_potential": to_int(plan.get("improvement_potential"), 0),
+        "quick_wins": to_string_list(plan.get("quick_wins", [])),
+        "skills_to_learn": plan.get("skills_to_learn", []),  # Keep as-is, usually already structured
+        "projects_to_build": plan.get("projects_to_build", []),  # Keep as-is, usually already structured
+        "estimated_weeks": to_int(plan.get("estimated_weeks"), 8),
+        "priority_order": to_string_list(plan.get("priority_order", [])),
+    }
+    return normalized
+
+
 async def generate_improvement_plan(
     gap_analysis: dict[str, Any],
     profile: dict[str, Any],
@@ -72,8 +111,9 @@ Missing Skills:
 {', '.join(gap_analysis.get("missing_skills", []))}
 """
     
-    return await LLMProvider().chat_json(
+    result = await LLMProvider().chat_json(
         "Create actionable improvement plans to close skill gaps and increase job match.",
         prompt,
         fallback,
     )
+    return _normalize_improvement_plan(result)
