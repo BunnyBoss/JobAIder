@@ -24,6 +24,14 @@ if [[ -f "$SCRIPT_DIR/.env" ]]; then
     source "$SCRIPT_DIR/.env"
     set +o allexport
     info ".env loaded"
+elif [[ -f "$SCRIPT_DIR/.env.icecloud.example" ]]; then
+    set -o allexport
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/.env.icecloud.example"
+    set +o allexport
+    info ".env.icecloud.example loaded"
+
+    warn "Using the .env.icecloud.example"
 else
     warn "No .env file found — relying on environment variables already set."
 fi
