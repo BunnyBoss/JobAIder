@@ -141,3 +141,34 @@ class InterviewAnswerRequest(BaseModel):
     session_id: int
     answer: str = ""
     action: Literal["submit", "skip", "exit"] = "submit"
+
+
+# Authentication schemas
+class SignupRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str
+    expires_in: int
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    created_at: str
+

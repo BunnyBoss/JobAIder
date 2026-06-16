@@ -5,11 +5,23 @@ from typing import Any
 from app.modules.llm_provider import LLMProvider
 
 
-def first_question(mode: str, difficulty: str) -> str:
-    return (
+async def generate_first_question(mode: str, difficulty: str, context: dict[str, Any] | None = None) -> str:
+    fallback_q = (
         f"Let's begin a {difficulty.lower()} {mode.lower()} interview. "
         "Tell me about a project that best proves you are a strong fit for this role."
     )
+    prompt = f"""
+Generate the VERY FIRST question to start a {mode} interview at a {difficulty} difficulty level.
+The question must be highly tailored to the provided profile and role. Do not include any greetings, just the question itself.
+
+Context: {context or {}}
+"""
+    result = await LLMProvider().chat_text(
+        "You are an expert interviewer starting an interview. Ask exactly one tailored question.",
+        prompt,
+        fallback_q,
+    )
+    return result
 
 
 async def evaluate_answer(

@@ -1,4 +1,7 @@
+import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "./auth";
+
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+
 
 export type SavedProfile = {
   id: number;
@@ -61,14 +64,41 @@ export type SessionFeedback = {
   improvements: string[];
 };
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, _retry = true): Promise<T> {
+  const token = getAccessToken();
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {})
     }
   });
+
+  // Auto-refresh on 401 (one retry)
+  if (response.status === 401 && _retry) {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      try {
+        const refreshed = await fetch(`${API_BASE}/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        if (refreshed.ok) {
+          const data = await refreshed.json();
+          setTokens(data.access_token, data.refresh_token);
+          return request<T>(path, init, false); // retry once
+        }
+      } catch {
+        // refresh failed – fall through to clear tokens
+      }
+    }
+    clearTokens();
+    if (typeof window !== "undefined") window.location.href = "/login";
+    throw new Error("Session expired. Please log in again.");
+  }
+
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(detail || `Request failed: ${response.status}`);
@@ -76,8 +106,42 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export type AuthTokenResponse = {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+};
+
+export type UserInfo = {
+  id: number;
+  username: string;
+  email: string;
+  created_at: string;
+};
+
 export const api = {
   health: () => request<{ status: string }>("/api/health"),
+  // Auth
+  login: (username: string, password: string) =>
+    fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    }).then(async (r) => {
+      if (!r.ok) throw new Error((await r.json()).detail ?? "Login failed");
+      return r.json() as Promise<AuthTokenResponse>;
+    }),
+  signup: (username: string, email: string, password: string) =>
+    fetch(`${API_BASE}/auth/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, email, password }),
+    }).then(async (r) => {
+      if (!r.ok) throw new Error((await r.json()).detail ?? "Signup failed");
+      return r.json() as Promise<AuthTokenResponse>;
+    }),
+  me: () => request<UserInfo>("/auth/me"),
   settings: () => request<Record<string, string>>("/api/settings"),
   saveSettings: (body: Record<string, string>) =>
     request<{ saved: boolean }>("/api/settings", { method: "PUT", body: JSON.stringify(body) }),
@@ -89,7 +153,12 @@ export const api = {
   uploadProfileFiles: async (files: File[]) => {
     const form = new FormData();
     files.forEach((file) => form.append("files", file));
-    const response = await fetch(`${API_BASE}/api/profile/files`, { method: "POST", body: form });
+    const token = getAccessToken();
+    const response = await fetch(`${API_BASE}/api/profile/files`, { 
+      method: "POST", 
+      body: form,
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
     if (!response.ok) {
       throw new Error(await response.text());
     }
@@ -98,7 +167,12 @@ export const api = {
   extractText: async (files: File[]) => {
     const form = new FormData();
     files.forEach((file) => form.append("files", file));
-    const response = await fetch(`${API_BASE}/api/utils/extract-text`, { method: "POST", body: form });
+    const token = getAccessToken();
+    const response = await fetch(`${API_BASE}/api/utils/extract-text`, { 
+      method: "POST", 
+      body: form,
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
     if (!response.ok) throw new Error(await response.text());
     return response.json() as Promise<{ files: Array<{ name: string; text: string }> }>;
   },
