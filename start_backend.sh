@@ -79,12 +79,24 @@ else
     PIP_CMD="$PYTHON -m pip"
 fi
 
-info "Installing/updating dependencies ..."
-$PIP_CMD install --quiet --upgrade pip 2>/dev/null || $PIP_CMD install --quiet --upgrade pip --break-system-packages
-$PIP_CMD install --quiet -r "$BACKEND_DIR/requirements.txt" 2>/dev/null || \
-    $PIP_CMD install --quiet -r "$BACKEND_DIR/requirements.txt" --break-system-packages
-$PIP_CMD install --quiet -e "$BACKEND_DIR" 2>/dev/null || \
-    $PIP_CMD install --quiet -e "$BACKEND_DIR" --break-system-packages
+# ── Install dependencies (skip if requirements.txt unchanged) ────────────────
+REQS_HASH_FILE="$BACKEND_DIR/.requirements.hash"
+CURRENT_HASH=$(md5sum "$BACKEND_DIR/requirements.txt" 2>/dev/null | awk '{print $1}')
+CACHED_HASH=""
+[[ -f "$REQS_HASH_FILE" ]] && CACHED_HASH=$(cat "$REQS_HASH_FILE")
+
+if [[ "$CURRENT_HASH" != "$CACHED_HASH" ]]; then
+    info "requirements.txt changed — installing dependencies ..."
+    $PIP_CMD install --quiet --upgrade pip 2>/dev/null || $PIP_CMD install --quiet --upgrade pip --break-system-packages
+    $PIP_CMD install --quiet -r "$BACKEND_DIR/requirements.txt" 2>/dev/null || \
+        $PIP_CMD install --quiet -r "$BACKEND_DIR/requirements.txt" --break-system-packages
+    $PIP_CMD install --quiet -e "$BACKEND_DIR" 2>/dev/null || \
+        $PIP_CMD install --quiet -e "$BACKEND_DIR" --break-system-packages
+    echo "$CURRENT_HASH" > "$REQS_HASH_FILE"
+    info "Dependencies installed ✓"
+else
+    info "Dependencies up-to-date (skipped install) ✓"
+fi
 
 # ── Stop any already-running backend ────────────────────────────────────────
 if [[ -f "$PID_FILE" ]]; then
