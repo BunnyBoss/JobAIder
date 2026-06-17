@@ -5,16 +5,25 @@ from tempfile import NamedTemporaryFile
 from typing import Annotated
 from io import BytesIO
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Depends, status
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import (
+    create_token,
+    get_current_user,
+    get_current_user_id,
+    hash_password,
+    verify_password,
+    verify_token,
+    TokenData,
+)
 from app.core.config import get_settings
 from app.db import decode_json, encode_json, get_db, init_db, now_iso
 from app.modules.document_ingestion import normalize_uploaded_name, read_document
 from app.modules.gap_analyzer import analyze_gap
 from app.modules.improvement_planner import generate_improvement_plan
-from app.modules.interview_coach import evaluate_answer, first_question, generate_session_feedback
+from app.modules.interview_coach import evaluate_answer, generate_first_question, generate_session_feedback
 from app.modules.obsidian_parser import scan_vault
 from app.modules.profile_builder import build_profile
 from app.modules.resume_generator import generate_generic_resumes, generate_tailored_resume
@@ -28,6 +37,11 @@ from app.schemas import (
     ObsidianScanRequest,
     ProfileUpdateRequest,
     ProviderSettings,
+    AuthResponse,
+    LoginRequest,
+    RefreshTokenRequest,
+    SignupRequest,
+    UserResponse,
     ResumeGenerateRequest,
     ResumeRequest,
     ResumeUpdateRequest,
@@ -39,7 +53,7 @@ app = FastAPI(title="JobAIder API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[origin.strip() for origin in get_settings().allowed_origins.split(",") if origin.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,14 +73,14 @@ def _row_json(table: str, row_id: int, json_column: str) -> dict:
     return decode_json(row[json_column])
 
 
-def _insert_document(source_type: str, name: str, content: str, path: str | None = None) -> int:
+def _insert_document(source_type: str, name: str, content: str, path: str | None = None, user_id: int = 1) -> int:
     with get_db() as conn:
         cur = conn.execute(
             """
-            INSERT INTO documents (source_type, name, path, content, metadata_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO documents (user_id, source_type, name, path, content, metadata_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (source_type, name, path, content, "{}", now_iso()),
+            (user_id, source_type, name, path, content, "{}", now_iso()),
         )
         return int(cur.lastrowid)
 
@@ -166,7 +180,7 @@ def update_settings(payload: ProviderSettings) -> dict:
 
 
 @app.post("/api/profile/obsidian")
-def ingest_obsidian(payload: ObsidianScanRequest) -> dict:
+def ingest_obsidian(payload: ObsidianScanRequest, user_id: int = Depends(get_current_user_id)) -> dict:
     try:
         documents = scan_vault(payload.vault_path)
     except ValueError as exc:
@@ -174,7 +188,7 @@ def ingest_obsidian(payload: ObsidianScanRequest) -> dict:
 
     saved = []
     for doc in documents:
-        doc_id = _insert_document(doc["source_type"], doc["name"], doc["content"], doc["path"])
+        doc_id = _insert_document(doc["source_type"], doc["name"], doc["content"], doc["path"], user_id)
         saved.append(
             {
                 "id": doc_id,
@@ -188,7 +202,7 @@ def ingest_obsidian(payload: ObsidianScanRequest) -> dict:
 
 
 @app.post("/api/profile/files")
-async def upload_profile_files(files: Annotated[list[UploadFile], File(...)]) -> dict:
+async def upload_profile_files(files: Annotated[list[UploadFile], File(...)], user_id: int = Depends(get_current_user_id)) -> dict:
     saved = []
     for upload in files:
         name = normalize_uploaded_name(upload.filename or "upload")
@@ -197,7 +211,7 @@ async def upload_profile_files(files: Annotated[list[UploadFile], File(...)]) ->
             temp.write(await upload.read())
             temp.flush()
             content = read_document(Path(temp.name))
-        doc_id = _insert_document("upload", name, content)
+        doc_id = _insert_document("upload", name, content, user_id=user_id)
         saved.append({"id": doc_id, "name": name, "source_type": "upload", "characters": len(content)})
     return {"documents": saved}
 
@@ -217,14 +231,17 @@ async def extract_text_from_files(files: Annotated[list[UploadFile], File(...)])
 
 
 @app.post("/api/profile/build")
-async def build_master_profile(payload: BuildProfileRequest) -> dict:
+async def build_master_profile(
+    payload: BuildProfileRequest,
+    user_id: int = Depends(get_current_user_id),
+) -> dict:
     parts = [payload.raw_text] if payload.raw_text else []
     if payload.document_ids:
         placeholders = ",".join("?" for _ in payload.document_ids)
         with get_db() as conn:
             rows = conn.execute(
-                f"SELECT name, content FROM documents WHERE id IN ({placeholders})",
-                payload.document_ids,
+                f"SELECT name, content FROM documents WHERE user_id = ? AND id IN ({placeholders})",
+                [user_id] + payload.document_ids,
             ).fetchall()
         parts.extend(f"# {row['name']}\n{row['content']}" for row in rows)
 
@@ -244,32 +261,36 @@ async def build_master_profile(payload: BuildProfileRequest) -> dict:
         
         cur = conn.execute(
             """
-            INSERT INTO profiles (name, summary, profile_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO profiles (user_id, name, summary, profile_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            ("Master Profile", summary, encode_json(profile), timestamp, timestamp),
+            (user_id, "Master Profile", summary, encode_json(profile), timestamp, timestamp),
         )
         profile_id = int(cur.lastrowid)
     return {"id": profile_id, "profile": profile}
 
 
 @app.get("/api/profiles/latest")
-def latest_profile() -> dict:
+def latest_profile(user_id: int = Depends(get_current_user_id)) -> dict:
     with get_db() as conn:
-        row = conn.execute("SELECT * FROM profiles ORDER BY updated_at DESC LIMIT 1").fetchone()
+        row = conn.execute(
+            "SELECT * FROM profiles WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
     if not row:
         return {"profile": None}
     return {"id": row["id"], "profile": decode_json(row["profile_json"])}
 
 
 @app.get("/api/profiles")
-def list_profiles() -> dict:
+def list_profiles(user_id: int = Depends(get_current_user_id)) -> dict:
     with get_db() as conn:
         rows = conn.execute(
             """
             SELECT id, name, summary, profile_json, created_at, updated_at
-            FROM profiles ORDER BY updated_at DESC
-            """
+            FROM profiles WHERE user_id = ? ORDER BY updated_at DESC
+            """,
+            (user_id,),
         ).fetchall()
     return {
         "profiles": [
@@ -287,9 +308,12 @@ def list_profiles() -> dict:
 
 
 @app.get("/api/profile/{profile_id}")
-def get_profile(profile_id: int) -> dict:
+def get_profile(profile_id: int, user_id: int = Depends(get_current_user_id)) -> dict:
     with get_db() as conn:
-        row = conn.execute("SELECT * FROM profiles WHERE id = ?", (profile_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM profiles WHERE id = ? AND user_id = ?",
+            (profile_id, user_id),
+        ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Profile not found")
     return {
@@ -303,7 +327,11 @@ def get_profile(profile_id: int) -> dict:
 
 
 @app.put("/api/profile/{profile_id}")
-def update_profile(profile_id: int, payload: ProfileUpdateRequest) -> dict:
+def update_profile(
+    profile_id: int,
+    payload: ProfileUpdateRequest,
+    user_id: int = Depends(get_current_user_id),
+) -> dict:
     summary = payload.profile.get("summary", "")
     # Ensure summary is a string (handle case where it might be a dict)
     if isinstance(summary, dict):
@@ -312,7 +340,10 @@ def update_profile(profile_id: int, payload: ProfileUpdateRequest) -> dict:
         summary = str(summary) if summary else ""
     
     with get_db() as conn:
-        row = conn.execute("SELECT id FROM profiles WHERE id = ?", (profile_id,)).fetchone()
+        row = conn.execute(
+            "SELECT id FROM profiles WHERE id = ? AND user_id = ?",
+            (profile_id, user_id),
+        ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Profile not found")
         conn.execute(
@@ -327,16 +358,22 @@ def update_profile(profile_id: int, payload: ProfileUpdateRequest) -> dict:
 
 
 @app.delete("/api/profile/{profile_id}")
-def delete_profile(profile_id: int) -> dict:
+def delete_profile(profile_id: int, user_id: int = Depends(get_current_user_id)) -> dict:
     with get_db() as conn:
-        cur = conn.execute("DELETE FROM profiles WHERE id = ?", (profile_id,))
+        cur = conn.execute(
+            "DELETE FROM profiles WHERE id = ? AND user_id = ?",
+            (profile_id, user_id),
+        )
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="Profile not found")
     return {"deleted": True, "id": profile_id}
 
 
 @app.post("/api/role/analyze")
-async def create_role_analysis(payload: RoleAnalysisRequest) -> dict:
+async def create_role_analysis(
+    payload: RoleAnalysisRequest,
+    user_id: int = Depends(get_current_user_id),
+) -> dict:
     from app.modules.role_analyzer import extract_role_metadata
     
     # Extract title and company from content if not provided or are defaults
@@ -352,23 +389,24 @@ async def create_role_analysis(payload: RoleAnalysisRequest) -> dict:
     with get_db() as conn:
         cur = conn.execute(
             """
-            INSERT INTO role_analyses (title, company, source_text, analysis_json, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO role_analyses (user_id, title, company, source_text, analysis_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (title, company, payload.content, encode_json(analysis), now_iso()),
+            (user_id, title, company, payload.content, encode_json(analysis), now_iso()),
         )
         role_id = int(cur.lastrowid)
     return {"id": role_id, "title": title, "company": company, "analysis": analysis}
 
 
 @app.get("/api/roles")
-def list_role_analyses() -> dict:
+def list_role_analyses(user_id: int = Depends(get_current_user_id)) -> dict:
     with get_db() as conn:
         rows = conn.execute(
             """
             SELECT id, title, company, source_text, analysis_json, created_at
-            FROM role_analyses ORDER BY created_at DESC
-            """
+            FROM role_analyses WHERE user_id = ? ORDER BY created_at DESC
+            """,
+            (user_id,),
         ).fetchall()
     return {
         "roles": [
@@ -436,38 +474,35 @@ def delete_role_analysis(role_analysis_id: int) -> dict:
 
 
 @app.post("/api/resume/generic")
-async def create_generic_resumes(payload: ResumeRequest) -> dict:
+async def create_generic_resumes(payload: ResumeRequest, user_id: int = Depends(get_current_user_id)) -> dict:
     profile = _row_json("profiles", payload.profile_id, "profile_json")
     ats, human = await generate_generic_resumes(profile)
     responses = []
     with get_db() as conn:
         for kind, markdown in [("ats", ats), ("human", human)]:
-            # Ensure markdown is a string (handle cases where it might be a dict)
             if isinstance(markdown, dict):
                 import json
                 markdown = json.dumps(markdown, ensure_ascii=False, indent=2)
             markdown = str(markdown) if markdown is not None else ""
-            
             cur = conn.execute(
                 """
-                INSERT INTO resumes (profile_id, role_analysis_id, kind, title, markdown, metadata_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO resumes (user_id, profile_id, role_analysis_id, kind, title, markdown, metadata_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (payload.profile_id, None, kind, f"{kind.upper()} Resume", markdown, "{}", now_iso()),
+                (user_id, payload.profile_id, None, kind, f"{kind.upper()} Resume", markdown, "{}", now_iso()),
             )
             responses.append({"id": int(cur.lastrowid), "kind": kind, "markdown": markdown})
     return {"resumes": responses}
 
 
 @app.post("/api/resume/generate")
-async def generate_resume(payload: ResumeGenerateRequest) -> dict:
+async def generate_resume(payload: ResumeGenerateRequest, user_id: int = Depends(get_current_user_id)) -> dict:
     if not payload.profile_id and not payload.resume_id:
         raise HTTPException(status_code=400, detail="Must provide profile_id or resume_id")
 
     source_content = None
     if payload.resume_id:
         source_content = _row_str("resumes", payload.resume_id, "markdown")
-        # For simplicity, we still need a profile_id for foreign keys. If resume is provided, fetch its profile_id.
         profile_id = int(_row_str("resumes", payload.resume_id, "profile_id"))
     else:
         source_content = _row_json("profiles", payload.profile_id, "profile_json")
@@ -475,29 +510,21 @@ async def generate_resume(payload: ResumeGenerateRequest) -> dict:
 
     metadata = {}
 
-    # Tailored path: role_analysis_id is provided (works for any kind)
     if payload.role_analysis_id is not None:
         role = _row_json("role_analyses", payload.role_analysis_id, "analysis_json")
         format_style = "human" if payload.kind == "human" else "ats"
         result = await generate_tailored_resume(source_content, role, format_style=format_style, custom_instructions=payload.custom_instructions)
         markdown = result["markdown"]
         metadata = {k: v for k, v in result.items() if k != "markdown"}
-        if payload.kind == "human":
-            title = "Tailored Human-Friendly Resume"
-        else:
-            title = "Tailored ATS Resume"
+        title = "Tailored Human-Friendly Resume" if payload.kind == "human" else "Tailored ATS Resume"
     else:
-        # Base resume path: no role analysis
         if isinstance(source_content, str):
-            # If source is already a resume and no tailoring, just re-format it? Or return as is?
-            # Actually, base resumes are meant to be generated from profiles.
             ats, human = await generate_generic_resumes(_row_json("profiles", profile_id, "profile_json"), custom_instructions=payload.custom_instructions)
         else:
             ats, human = await generate_generic_resumes(source_content, custom_instructions=payload.custom_instructions)
         markdown = ats if payload.kind == "ats" else human
         title = "ATS Resume" if payload.kind == "ats" else "Human-Friendly Resume"
 
-    # Ensure markdown is a string (handle cases where it might be a dict)
     if isinstance(markdown, dict):
         import json
         markdown = json.dumps(markdown, ensure_ascii=False, indent=2)
@@ -506,10 +533,11 @@ async def generate_resume(payload: ResumeGenerateRequest) -> dict:
     with get_db() as conn:
         cur = conn.execute(
             """
-            INSERT INTO resumes (profile_id, role_analysis_id, kind, title, markdown, metadata_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO resumes (user_id, profile_id, role_analysis_id, kind, title, markdown, metadata_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                user_id,
                 profile_id,
                 payload.role_analysis_id,
                 payload.kind,
@@ -531,7 +559,7 @@ async def generate_resume(payload: ResumeGenerateRequest) -> dict:
 
 
 @app.post("/api/resume/tailored")
-async def create_tailored_resume(payload: ResumeRequest) -> dict:
+async def create_tailored_resume(payload: ResumeRequest, user_id: int = Depends(get_current_user_id)) -> dict:
     if payload.role_analysis_id is None:
         raise HTTPException(status_code=400, detail="role_analysis_id is required")
     profile = _row_json("profiles", payload.profile_id, "profile_json")
@@ -540,10 +568,11 @@ async def create_tailored_resume(payload: ResumeRequest) -> dict:
     with get_db() as conn:
         cur = conn.execute(
             """
-            INSERT INTO resumes (profile_id, role_analysis_id, kind, title, markdown, metadata_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO resumes (user_id, profile_id, role_analysis_id, kind, title, markdown, metadata_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                user_id,
                 payload.profile_id,
                 payload.role_analysis_id,
                 "tailored",
@@ -557,13 +586,14 @@ async def create_tailored_resume(payload: ResumeRequest) -> dict:
 
 
 @app.get("/api/resumes")
-def list_resumes() -> dict:
+def list_resumes(user_id: int = Depends(get_current_user_id)) -> dict:
     with get_db() as conn:
         rows = conn.execute(
             """
             SELECT id, profile_id, role_analysis_id, kind, title, markdown, metadata_json, created_at
-            FROM resumes ORDER BY created_at DESC
-            """
+            FROM resumes WHERE user_id = ? ORDER BY created_at DESC
+            """,
+            (user_id,),
         ).fetchall()
     return {
         "resumes": [
@@ -670,7 +700,7 @@ def export_resume(resume_id: int, format: str = "markdown") -> StreamingResponse
 
 
 @app.post("/api/gap/analyze")
-async def create_gap_analysis(payload: GapAnalysisRequest) -> dict:
+async def create_gap_analysis(payload: GapAnalysisRequest, user_id: int = Depends(get_current_user_id)) -> dict:
     if payload.resume_id is not None:
         profile_id, profile = _resume_as_profile(payload.resume_id)
     elif payload.profile_id is not None:
@@ -685,22 +715,23 @@ async def create_gap_analysis(payload: GapAnalysisRequest) -> dict:
     with get_db() as conn:
         cur = conn.execute(
             """
-            INSERT INTO gap_analyses (profile_id, role_analysis_id, analysis_json, created_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO gap_analyses (user_id, profile_id, role_analysis_id, analysis_json, created_at)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (profile_id, payload.role_analysis_id, encode_json(analysis), now_iso()),
+            (user_id, profile_id, payload.role_analysis_id, encode_json(analysis), now_iso()),
         )
     return {"id": int(cur.lastrowid), "analysis": analysis}
 
 
 @app.get("/api/gaps")
-def list_gap_analyses() -> dict:
+def list_gap_analyses(user_id: int = Depends(get_current_user_id)) -> dict:
     with get_db() as conn:
         rows = conn.execute(
             """
             SELECT id, profile_id, role_analysis_id, analysis_json, created_at
-            FROM gap_analyses ORDER BY created_at DESC
-            """
+            FROM gap_analyses WHERE user_id = ? ORDER BY created_at DESC
+            """,
+            (user_id,),
         ).fetchall()
     return {
         "gaps": [
@@ -754,7 +785,7 @@ def delete_gap_analysis(gap_id: int) -> dict:
 
 
 @app.post("/api/improvement/generate")
-async def create_improvement_plan(payload: dict) -> dict:
+async def create_improvement_plan(payload: dict, user_id: int = Depends(get_current_user_id)) -> dict:
     gap_id = payload.get("gap_analysis_id")
     if not gap_id:
         raise HTTPException(status_code=400, detail="gap_analysis_id is required")
@@ -786,10 +817,10 @@ async def create_improvement_plan(payload: dict) -> dict:
     with get_db() as conn:
         cur = conn.execute(
             """
-            INSERT INTO improvement_plans (gap_analysis_id, profile_id, role_analysis_id, plan_json, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO improvement_plans (user_id, gap_analysis_id, profile_id, role_analysis_id, plan_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (gap_id, gap_row["profile_id"], gap_row["role_analysis_id"], encode_json(plan), now_iso())
+            (user_id, gap_id, gap_row["profile_id"], gap_row["role_analysis_id"], encode_json(plan), now_iso())
         )
         plan_id = int(cur.lastrowid)
     
@@ -797,14 +828,16 @@ async def create_improvement_plan(payload: dict) -> dict:
 
 
 @app.get("/api/improvement/plans")
-def list_improvement_plans() -> dict:
+def list_improvement_plans(user_id: int = Depends(get_current_user_id)) -> dict:
     with get_db() as conn:
         rows = conn.execute(
             """
             SELECT id, gap_analysis_id, profile_id, role_analysis_id, plan_json, created_at
             FROM improvement_plans
+            WHERE user_id = ?
             ORDER BY created_at DESC
-            """
+            """,
+            (user_id,),
         ).fetchall()
     
     plans = []
@@ -831,23 +864,40 @@ def delete_improvement_plan(plan_id: int) -> dict:
 
 
 @app.post("/api/interview/start")
-def start_interview(payload: InterviewStartRequest) -> dict:
+async def start_interview(payload: InterviewStartRequest, user_id: int = Depends(get_current_user_id)) -> dict:
     profile_id = payload.profile_id
     context_note = ""
+    profile_data = {}
+
     if payload.resume_id is not None:
         profile_id, resume_profile = _resume_as_profile(payload.resume_id)
+        profile_data = resume_profile
         context_note = f" Use resume #{payload.resume_id}: {resume_profile['resume_title']}."
-    question = first_question(payload.mode, payload.difficulty) + context_note
+    else:
+        with get_db() as conn:
+            profile_row = conn.execute("SELECT profile_json FROM profiles WHERE id = ?", (profile_id,)).fetchone()
+            if profile_row:
+                profile_data = decode_json(profile_row[0])
+
+    role_data = {}
+    with get_db() as conn:
+        role_row = conn.execute("SELECT analysis_json FROM role_analyses WHERE id = ?", (payload.role_analysis_id,)).fetchone()
+        if role_row:
+            role_data = decode_json(role_row[0])
+
+    context = {"profile": profile_data, "role": role_data}
+    question = await generate_first_question(payload.mode, payload.difficulty, context) + context_note
     history = [{"role": "assistant", "content": question}]
     timestamp = now_iso()
     with get_db() as conn:
         cur = conn.execute(
             """
             INSERT INTO interview_sessions
-            (profile_id, role_analysis_id, mode, difficulty, question_count, history_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (user_id, profile_id, role_analysis_id, mode, difficulty, question_count, history_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                user_id,
                 profile_id,
                 payload.role_analysis_id,
                 payload.mode,
@@ -868,11 +918,11 @@ def start_interview(payload: InterviewStartRequest) -> dict:
 
 
 @app.post("/api/interview/answer")
-async def answer_interview(payload: InterviewAnswerRequest) -> dict:
+async def answer_interview(payload: InterviewAnswerRequest, user_id: int = Depends(get_current_user_id)) -> dict:
     with get_db() as conn:
         row = conn.execute(
-            "SELECT history_json, question_count, mode, difficulty FROM interview_sessions WHERE id = ?",
-            (payload.session_id,),
+            "SELECT history_json, question_count, mode, difficulty, profile_id, role_analysis_id FROM interview_sessions WHERE id = ? AND user_id = ?",
+            (payload.session_id, user_id),
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Interview session not found")
@@ -881,6 +931,22 @@ async def answer_interview(payload: InterviewAnswerRequest) -> dict:
     question_count = row[1]
     mode = row[2]
     difficulty = row[3]
+    profile_id = row[4]
+    role_analysis_id = row[5]
+
+    profile_data = {}
+    with get_db() as conn:
+        profile_row = conn.execute("SELECT profile_json FROM profiles WHERE id = ?", (profile_id,)).fetchone()
+        if profile_row:
+            profile_data = decode_json(profile_row[0])
+
+    role_data = {}
+    with get_db() as conn:
+        role_row = conn.execute("SELECT analysis_json FROM role_analyses WHERE id = ?", (role_analysis_id,)).fetchone()
+        if role_row:
+            role_data = decode_json(role_row[0])
+            
+    context = {"profile": profile_data, "role": role_data}
 
     # Calculate current question number (each Q&A pair = 2 entries)
     question_number = (len(history) + 1) // 2
@@ -890,7 +956,7 @@ async def answer_interview(payload: InterviewAnswerRequest) -> dict:
         history.append({"role": "user", "content": "[SKIPPED]"})
         
         last_question = next((item["content"] for item in reversed(history[:-1]) if item["role"] == "assistant"), "")
-        evaluation = await evaluate_answer(mode, difficulty, last_question, "[User skipped this question. Please ask a new, different question.]")
+        evaluation = await evaluate_answer(mode, difficulty, last_question, "[User skipped this question. Please ask a new, different question.]", context)
         history.append({"role": "assistant", "content": evaluation["next_question"]})
         
         question_number = (len(history) + 1) // 2
@@ -939,7 +1005,7 @@ async def answer_interview(payload: InterviewAnswerRequest) -> dict:
     history.append({"role": "user", "content": payload.answer})
 
     last_question = next((item["content"] for item in reversed(history) if item["role"] == "assistant"), "")
-    evaluation = await evaluate_answer(mode, difficulty, last_question, payload.answer)
+    evaluation = await evaluate_answer(mode, difficulty, last_question, payload.answer, context)
     evaluation_entry = {
         "role": "assistant",
         "content": evaluation["next_question"],
@@ -972,3 +1038,119 @@ async def answer_interview(payload: InterviewAnswerRequest) -> dict:
             "question_count": question_count,
             "is_final_question": False,
         }
+
+
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+
+@app.post("/auth/signup", response_model=AuthResponse)
+async def signup(payload: SignupRequest) -> dict:
+    """Create a new user account."""
+    # Validate input
+    if len(payload.username) < 3:
+        raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
+    if len(payload.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if "@" not in payload.email:
+        raise HTTPException(status_code=400, detail="Invalid email address")
+    
+    password_hash = hash_password(payload.password)
+    timestamp = now_iso()
+    
+    with get_db() as conn:
+        try:
+            cur = conn.execute(
+                """
+                INSERT INTO users (username, email, password_hash, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (payload.username, payload.email, password_hash, timestamp),
+            )
+            user_id = int(cur.lastrowid)
+        except Exception as e:
+            if "UNIQUE constraint failed" in str(e):
+                if "username" in str(e):
+                    raise HTTPException(status_code=400, detail="Username already exists")
+                else:
+                    raise HTTPException(status_code=400, detail="Email already exists")
+            raise HTTPException(status_code=400, detail="Failed to create user")
+    
+    # Generate tokens
+    access_token, access_expires = create_token(user_id, payload.username, "access")
+    refresh_token, refresh_expires = create_token(user_id, payload.username, "refresh")
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": access_expires,
+    }
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+async def login(payload: LoginRequest) -> dict:
+    """Authenticate a user and return access + refresh tokens."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id, password_hash FROM users WHERE username = ?",
+            (payload.username,),
+        ).fetchone()
+    
+    if not row or not verify_password(payload.password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    
+    user_id = row["id"]
+    
+    # Generate tokens
+    access_token, access_expires = create_token(user_id, payload.username, "access")
+    refresh_token, refresh_expires = create_token(user_id, payload.username, "refresh")
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": access_expires,
+    }
+
+
+@app.post("/auth/refresh", response_model=AuthResponse)
+async def refresh(payload: RefreshTokenRequest) -> dict:
+    """Refresh an access token using a refresh token."""
+    token_data = verify_token(payload.refresh_token)
+    
+    if token_data.type != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid token type for refresh")
+    
+    # Generate new access token
+    access_token, access_expires = create_token(token_data.user_id, token_data.username, "access")
+    refresh_token, refresh_expires = create_token(token_data.user_id, token_data.username, "refresh")
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": access_expires,
+    }
+
+
+@app.get("/auth/me", response_model=UserResponse)
+async def get_me(token_data: TokenData = Depends(get_current_user)) -> dict:
+    """Get current authenticated user info."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id, username, email, created_at FROM users WHERE id = ?",
+            (token_data.user_id,),
+        ).fetchone()
+    
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "id": row["id"],
+        "username": row["username"],
+        "email": row["email"],
+        "created_at": row["created_at"],
+    }
+

@@ -32,7 +32,7 @@ export default function SettingsPage() {
         <CardContent className="space-y-3">
           <Input value={form.model_name} onChange={(event) => setForm({ ...form, model_name: event.target.value })} placeholder="MODEL_NAME" />
           <Input value={form.openai_base_url} onChange={(event) => setForm({ ...form, openai_base_url: event.target.value })} placeholder="OPENAI_BASE_URL" />
-          <Input value={form.openai_api_key} onChange={(event) => setForm({ ...form, openai_api_key: event.target.value })} placeholder="OPENAI_API_KEY" type="password" />
+          {/*<Input value={form.openai_api_key} onChange={(event) => setForm({ ...form, openai_api_key: event.target.value })} placeholder="OPENAI_API_KEY" type="password" />*/}
           <Button onClick={() => save.mutate()} disabled={save.isPending}>Save Settings</Button>
           <StatusPanel loading={settings.isPending || save.isPending} error={settings.error ?? save.error} success={save.data ? "Settings saved" : undefined} />
           <div className="text-xs text-muted-foreground">The backend also reads MODEL_NAME, OPENAI_API_KEY, and OPENAI_BASE_URL from environment variables.</div>

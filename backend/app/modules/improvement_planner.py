@@ -68,7 +68,7 @@ def _normalize_improvement_plan(plan: dict[str, Any]) -> dict[str, Any]:
     normalized = {
         "overall_score": to_int(plan.get("overall_score"), 0),
         "improvement_potential": to_int(plan.get("improvement_potential"), 0),
-        "quick_wins": to_string_list(plan.get("quick_wins", [])),
+        "quick_wins": plan.get("quick_wins", []),  # Keep as-is, frontend handles strings or dicts
         "skills_to_learn": plan.get("skills_to_learn", []),  # Keep as-is, usually already structured
         "projects_to_build": plan.get("projects_to_build", []),  # Keep as-is, usually already structured
         "estimated_weeks": to_int(plan.get("estimated_weeks"), 8),

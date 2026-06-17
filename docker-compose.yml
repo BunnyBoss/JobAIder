@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: jobaider-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_data:/app/data
+    env_file:
+      - .env
+    environment:
+      # In Docker Compose, the frontend is exposed via localhost on the host machine,
+      # but if you access it via a domain, add it to ALLOWED_ORIGINS in .env
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: jobaider-frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      # This tells the client browser where to find the API
+      - NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE:-http://localhost:8000}
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend_data:
+    name: jobaider_backend_data

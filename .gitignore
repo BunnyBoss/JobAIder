@@ -11,6 +11,7 @@ backend/jobradar.db
 .env
 .env.*
 !.env.example
+!.env.icecloud.example
 
 # Python
 backend/**/*.pyc
@@ -32,3 +33,4 @@ frontend/build/
 .vscode/
 .idea/
 .DS_Store
+init-commands.sh
