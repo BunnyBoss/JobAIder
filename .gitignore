@@ -33,3 +33,4 @@ frontend/build/
 .vscode/
 .idea/
 .DS_Store
+init-commands.sh
